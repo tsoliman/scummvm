@@ -176,7 +176,11 @@ void Input::checkKeys() {
 		}
 		break;
 	case Common::KEYCODE_F1: // use Journal
+#ifdef MAEMO_SDL
+	case Common::KEYCODE_F4: // menu key on N770
+#else
 	case Common::KEYCODE_F5:
+#endif
 		if (_cutawayRunning) {
 			if (_canQuit) {
 				_keyVerb = VERB_USE_JOURNAL;

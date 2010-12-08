@@ -708,8 +708,21 @@ void SwordEngine::delay(int32 amount) { //copied and mutilated from sky.cpp
 		while (_eventMan->pollEvent(event)) {
 			switch (event.type) {
 			case Common::EVENT_KEYDOWN:
+#ifdef MAEMO_SDL
+// map center to right button
+				if (event.kbd.keycode == 13) {
+					_mouseState |= BS1R_BUTTON_DOWN;
+				} else
+#endif
 				_keyPressed = event.kbd;
 				break;
+#ifdef MAEMO_SDL
+			case Common::EVENT_KEYUP:
+				if (event.kbd.keycode == 13) {
+					_mouseState |= BS1R_BUTTON_UP;
+				}
+				break;
+#endif
 			case Common::EVENT_MOUSEMOVE:
 				_mouseCoord = event.mouse;
 				break;

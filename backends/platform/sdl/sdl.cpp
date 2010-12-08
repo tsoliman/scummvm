@@ -48,6 +48,10 @@
 #include "icons/scummvm.xpm"
 
 #include <time.h>	// for getTimeAndDate()
+#ifdef        MAEMO_SDL
+#include <SDL/SDL_syswm.h>
+#include <X11/Xutil.h>
+#endif
 
 //#define SAMPLES_PER_SEC 11025
 #define SAMPLES_PER_SEC 22050
@@ -214,6 +218,14 @@ void OSystem_SDL::initBackend() {
 		_timerID = SDL_AddTimer(10, &timer_handler, _timer);
 	}
 
+#ifdef        MAEMO_SDL
+	// some keymappings are done differently for devices with full keyboard (N810=RX-34)
+	_have_keyboard=0;
+	char *device=getenv("SCUMMVM_MAEMO_DEVICE");
+	if (device != NULL)
+	if ( (strcmp(device,"RX-44") == 0) || (strcmp(device,"RX-48") == 0) || (strcmp(device,"RX-51") == 0))
+	    _have_keyboard=1;
+#endif
 	// Invoke parent implementation of this method
 	OSystem::initBackend();
 
@@ -427,6 +439,23 @@ Common::WriteStream *OSystem_SDL::createConfigWriteStream() {
 	return file.createWriteStream();
 }
 
+#ifdef MAEMO_SDL
+void OSystem_SDL::setXWindowName(const char *caption) {
+	SDL_SysWMinfo info;
+	SDL_VERSION(&info.version);
+	if ( SDL_GetWMInfo(&info) ) {
+		Display *dpy = info.info.x11.display;
+		Window win;
+		//if (_videoMode.fullscreen)
+		win = info.info.x11.fswindow;
+		if (win) XStoreName(dpy, win, caption);
+		//else
+		win = info.info.x11.wmwindow;
+		if (win) XStoreName(dpy, win, caption);
+	}
+}
+#endif
+
 void OSystem_SDL::setWindowCaption(const char *caption) {
 	Common::String cap;
 	byte c;
@@ -443,6 +472,11 @@ void OSystem_SDL::setWindowCaption(const char *caption) {
 	}
 
 	SDL_WM_SetCaption(cap.c_str(), cap.c_str());
+#ifdef MAEMO_SDL
+	Common::String cap2("ScummVM - "); // 2 lines in OS2008 task switcher, set first line
+	cap=cap2+cap;
+	setXWindowName(cap.c_str());
+#endif
 }
 
 bool OSystem_SDL::hasFeature(Feature f) {
@@ -519,6 +553,14 @@ void OSystem_SDL::quit() {
 #endif
 }
 
+#ifdef MAEMO_SDL
+// no Maemo version needs setupIcon
+// also N900 is hit by SDL_WM_SetIcon bug (window cannot receive input)
+// http://bugzilla.libsdl.org/show_bug.cgi?id=586
+void OSystem_SDL::setupIcon() {
+    ;
+}
+#else
 void OSystem_SDL::setupIcon() {
 	int x, y, w, h, ncols, nbytes, i;
 	unsigned int rgba[256];
@@ -570,6 +612,7 @@ void OSystem_SDL::setupIcon() {
 	SDL_FreeSurface(sdl_surf);
 	free(icon);
 }
+#endif
 
 OSystem::MutexRef OSystem_SDL::createMutex() {
 	return (MutexRef) SDL_CreateMutex();

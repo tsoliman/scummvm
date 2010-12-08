@@ -96,3 +96,8 @@ endif
 
 # Include common rules
 include $(srcdir)/rules.mk
+
+#ugly workaround, screen.cpp crashes gcc version 3.4.4 (CodeSourcery ARM 2005q3-2) with anything but -O3
+$(MODULE)/screen.o: $(MODULE)/screen.cpp
+	$(MKDIR) $(*D)/$(DEPDIR)
+	$(CXX) -Wp,-MMD,"$(*D)/$(DEPDIR)/$(*F).d",-MQ,"$@",-MP $(CXXFLAGS) -O3 $(CPPFLAGS) -c $(<) -o $*.o

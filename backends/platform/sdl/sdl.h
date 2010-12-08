@@ -232,6 +232,9 @@ public:
 	virtual int getGraphicsMode() const;
 
 	virtual void setWindowCaption(const char *caption);
+#ifdef	MAEMO_SDL
+	void setXWindowName(const char *caption);
+#endif
 	virtual bool openCD(int drive);
 
 	virtual bool hasFeature(Feature f);
@@ -416,6 +419,9 @@ protected:
 	// joystick
 	SDL_Joystick *_joystick;
 
+#ifdef	MAEMO_SDL
+	int _have_keyboard;
+#endif
 	// Shake mode
 	int _currentShakePos;
 	int _newShakePos;

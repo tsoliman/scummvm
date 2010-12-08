@@ -177,7 +177,7 @@ NASM=""
 prefix=NONE
 exec_prefix=NONE
 bindir='${exec_prefix}/bin'
-libdir='${exec_prefix}/lib'
+libdir='${exec_prefix}/lib/scummvm'
 datarootdir='${prefix}/share'
 datadir='${datarootdir}/scummvm'
 mandir='${datarootdir}/man'
@@ -2574,7 +2574,7 @@ case $_backend in
 		DEFINES="$DEFINES -DPLUGIN_DIRECTORY=\\\"../plugins\\\""
 		;;
 	*)
-		DEFINES="$DEFINES -DPLUGIN_DIRECTORY=\\\"$libdir/scummvm\\\""
+		DEFINES="$DEFINES -DPLUGIN_DIRECTORY=\\\"$libdir\\\""
 		;;
 esac
 

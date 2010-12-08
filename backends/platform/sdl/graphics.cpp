@@ -535,6 +535,56 @@ static void fixupResolutionForAspectRatio(AspectRatio desiredAspectRatio, int &w
 	height = bestMode->h;
 }
 
+#ifdef  MAEMO_SDL
+#include "SDL_syswm.h"
+
+static void maemo5_WM_init(int fullscreen){
+//static int fsdone=0;
+//static int wmdone=0;
+SDL_SysWMinfo info;
+SDL_VERSION(&info.version);
+if ( SDL_GetWMInfo(&info) ) {
+        Display *dpy = info.info.x11.display;
+        Window win;
+        unsigned long val = 1;
+        Atom atom_zoom = XInternAtom(dpy, "_HILDON_ZOOM_KEY_ATOM", 0);
+        info.info.x11.lock_func();
+        win = info.info.x11.fswindow;
+        if (win)
+                XChangeProperty (dpy,win,atom_zoom,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1); // grab zoom keys
+        win = info.info.x11.wmwindow;
+        if (win)
+                XChangeProperty (dpy,win,atom_zoom,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1); // grab zoom keys
+#if 0
+        if (win && fullscreen /* && !fsdone */ ) {
+                XUnmapWindow(dpy,win);
+                XChangeProperty (dpy,win,atom_zoom,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1); // grab zoom keys
+                Atom atom_noncomposited = XInternAtom(dpy, "_HILDON_NON_COMPOSITED_WINDOW", 0);
+                Atom atom_wmstate = XInternAtom(dpy, "_NET_WM_STATE", 0);
+                Atom atom_wmstate_fullscreen = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", 0);
+                XSetWindowAttributes xattr;
+                xattr.override_redirect = False;
+                XChangeProperty (dpy,win,atom_noncomposited,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1); // make window not composited
+                //XChangeWindowAttributes(dpy, win, CWOverrideRedirect, &xattr); //
+                XChangeProperty (dpy,win,atom_wmstate,XA_ATOM,32,PropModeReplace,(unsigned char *) &atom_wmstate_fullscreen,1); // mark as fullscreen = disable tskswitch button
+                XMapWindow(dpy,win);
+                //fsdone=1;
+        }
+        win = info.info.x11.wmwindow;
+        if (win && !fullscreen /* && !wmdone */) {
+                XUnmapWindow(dpy,win);
+                XChangeProperty (dpy,win,atom_zoom,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1);
+                XMapWindow(dpy,win);
+                //wmdone=1;
+        }
+#endif
+        info.info.x11.unlock_func();
+//      XSync(dpy,False);
+}
+}
+#endif
+
+
 bool OSystem_SDL::loadGFXMode() {
 	assert(_inited);
 	_forceFull = true;
@@ -575,6 +625,9 @@ bool OSystem_SDL::loadGFXMode() {
 		error("allocating _screen failed");
 #endif
 
+#ifdef  MAEMO_SDL
+        maemo5_WM_init(_videoMode.fullscreen);
+#endif
 	//
 	// Create the surface that contains the scaled graphics in 16 bit mode
 	//
@@ -959,6 +1012,14 @@ void OSystem_SDL::setFullscreenMode(bool enable) {
 		_videoMode.fullscreen = enable;
 		_transactionDetails.needHotswap = true;
 	}
+#ifdef MAEMO_SDL
+	char *caption;
+	char title[50];
+	title[49] = '\0';
+	SDL_WM_GetCaption(&caption, NULL);
+	if (caption!=NULL) {strncpy(title,caption,49);
+	setXWindowName(caption); }
+#endif
 }
 
 void OSystem_SDL::setAspectRatioCorrection(bool enable) {

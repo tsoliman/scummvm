@@ -682,11 +682,27 @@ void Sword2Engine::parseInputEvents() {
 						_gameSpeed = 1;
 				}
 			}
+#ifdef MAEMO_SDL
+// map center to right button
+			else if (event.kbd.keycode == 13 && !(_inputEventFilter & RD_RIGHTBUTTONDOWN)) {
+				_mouseEvent.pending = true;
+				_mouseEvent.buttons = RD_RIGHTBUTTONDOWN;
+			} else
+#endif
 			if (!(_inputEventFilter & RD_KEYDOWN)) {
 				_keyboardEvent.pending = true;
 				_keyboardEvent.kbd = event.kbd;
 			}
 			break;
+#ifdef MAEMO_SDL
+		case Common::EVENT_KEYUP:
+// map center to right button
+			if (event.kbd.keycode == 13 && !(_inputEventFilter & RD_RIGHTBUTTONUP)) {
+				_mouseEvent.pending = true;
+				_mouseEvent.buttons = RD_RIGHTBUTTONUP;
+			}
+			break;
+#endif
 		case Common::EVENT_LBUTTONDOWN:
 			if (!(_inputEventFilter & RD_LEFTBUTTONDOWN)) {
 				_mouseEvent.pending = true;
