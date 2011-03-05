@@ -302,12 +302,12 @@ void FrotzInterpreter::init_palette() {
 	}
 
 	// Set the initial palette
-	g_system->setPalette((const byte *)&DEFAULT_COLOUR_LIST[0], 0, 16);
+	g_system->getPaletteManager()->setPalette((const byte *)&DEFAULT_COLOUR_LIST[0], 0, 16);
 
 	// Clear the remainder of the palette
 	uint32 emptyPalette[240];
 	Common::set_to(&emptyPalette[0], &emptyPalette[240], 0);
-	g_system->setPalette((const byte *)&emptyPalette[0], 16, 240);
+	g_system->getPaletteManager()->setPalette((const byte *)&emptyPalette[0], 16, 240);
 }
 
 void FrotzInterpreter::go() {
