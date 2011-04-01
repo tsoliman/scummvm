@@ -29,11 +29,7 @@ MODULES += \
 	common \
 	po
 
-ifdef USE_MT32EMU
-MODULES += audio/softsynth/mt32
-endif
-
-######################################################################
+#####################################################################
 # The build rules follow - normally you should have no need to
 # touch whatever comes after here.
 ######################################################################

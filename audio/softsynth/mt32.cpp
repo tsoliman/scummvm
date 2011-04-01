@@ -24,7 +24,7 @@
 
 #ifdef USE_MT32EMU
 
-#include "audio/softsynth/mt32/mt32emu.h"
+#include <mt32emu/mt32emu.h>
 
 #include "audio/softsynth/emumidi.h"
 #include "audio/musicplugin.h"
@@ -86,35 +86,30 @@ public:
 
 class MT32File : public MT32Emu::File {
 	Common::File _in;
-	Common::DumpFile _out;
 public:
 	bool open(const char *filename, OpenMode mode) {
-		if (mode == OpenMode_read)
-			return _in.open(filename);
-		else
-			return _out.open(filename);
+		assert(mode == OpenMode_read);
+
+		return _in.open(filename);
 	}
+
 	void close() {
 		_in.close();
-		_out.close();
 	}
+
 	size_t read(void *in, size_t size) {
 		return _in.read(in, size);
 	}
+
 	bool readBit8u(MT32Emu::Bit8u *in) {
 		byte b = _in.readByte();
 		if (_in.eos())
 			return false;
+
 		*in = b;
 		return true;
 	}
-	size_t write(const void *in, size_t size) {
-		return _out.write(in, size);
-	}
-	bool writeBit8u(MT32Emu::Bit8u out) {
-		_out.writeByte(out);
-		return !_out.err();
-	}
+
 	bool isEOF() {
 		return _in.isOpen() && _in.eos();
 	}
@@ -271,10 +266,10 @@ static int MT32_Report(void *userData, MT32Emu::ReportType type, const void *rep
 
 MidiDriver_MT32::MidiDriver_MT32(Audio::Mixer *mixer) : MidiDriver_Emulated(mixer) {
 	_channelMask = 0xFFFF; // Permit all 16 channels by default
-	uint i;
-	for (i = 0; i < ARRAYSIZE(_midiChannels); ++i) {
+
+	for (uint i = 0; i < ARRAYSIZE(_midiChannels); ++i)
 		_midiChannels[i].init(this, i);
-	}
+
 	_synth = NULL;
 	// A higher baseFreq reduces the length used in generateSamples(),
 	// and means that the timer callback will be called more often.
@@ -317,7 +312,7 @@ int MidiDriver_MT32::open() {
 
 	if (screenFormat.bytesPerPixel == 1) {
 		const byte dummy_palette[] = {
-			0, 0, 0,		// background
+			0, 0, 0,	// background
 			0, 171, 0,	// border, font
 			171, 0, 0	// fill
 		};
