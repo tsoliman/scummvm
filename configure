@@ -2074,6 +2074,7 @@ case $_host_os in
 		if test -z "$_host"; then
 			CXXFLAGS="$CXXFLAGS $(getconf LFS_CFLAGS 2>/dev/null)"
 		fi
+		LIBS="$LIBS -lmt32emu "
 		;;
 	maemo)
 		DEFINES="$DEFINES -DMAEMO"
