@@ -396,7 +396,7 @@ bool FrotzInterpreter::validateFile(const Common::FSNode &file, char *target, ch
 			strcat(version, buffer);
 
 		if (unknownFlag)
-			warning("Unknown z-code game '%s' (%s)\nmd5=%s", filename.c_str(), version, md5Str);
+			warning("Unknown z-code game '%s' (%s)\nmd5=%s", filename.c_str(), version, md5Str.c_str());
 	}
 	delete rs;
 	if (blorbFile) delete blorbFile;
