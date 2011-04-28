@@ -29,6 +29,7 @@
 #include "common/array.h"
 #include "common/endian.h"
 #include "common/file.h"
+#include "common/textconsole.h"
 #include "graphics/surface.h"
 
 namespace Gargoyle {
