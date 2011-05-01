@@ -193,7 +193,7 @@ void ScreenSurface::init(const Common::Rect &bounds, int pitchAmount, byte *data
 	
 	w = bounds.width();
 	h = bounds.height();
-	bytesPerPixel = 1;
+	format.bytesPerPixel = 1;
 	pitch = pitchAmount;
 
 	_freeData = !data;
