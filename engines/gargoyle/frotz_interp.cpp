@@ -30,7 +30,6 @@
 #include "gargoyle/gargoyle.h"
 #include "gargoyle/frotz_static.h"
 
-#include "common/EventRecorder.h"
 #include "common/events.h"
 #include "common/file.h"
 #include "engines/engine.h"
@@ -193,9 +192,7 @@ int inline fgetb(Common::InSaveFile *f) {
 }
 
 FrotzInterpreter::FrotzInterpreter(Gargoyle::GargoyleEngine &engine): 
-		Interpreter(engine), _os(_h, *this) {
-	g_eventRec.registerRandomSource(_rnd, "frotzInterpreter");
-
+		Interpreter(engine), _os(_h, *this), _rnd("gargoyle") {
 	initInterpVars();
 
 	initDebugger();
