@@ -236,9 +236,7 @@ SaveStateList GargoyleMetaEngine::listSaves(const char *target) const {
 int GargoyleMetaEngine::getMaximumSaveSlot() const { return 99; }
 
 void GargoyleMetaEngine::removeSaveState(const char *target, int slot) const {
-	char filename[100];
-	snprintf(filename, 100, "%s.s%.2d", target, slot);
-	
+	Common::String filename = Common::String::format("%s.s%.2d", target, slot);
 	g_system->getSavefileManager()->removeSavefile(filename);
 }
 

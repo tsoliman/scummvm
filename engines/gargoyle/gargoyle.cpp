@@ -561,15 +561,11 @@ void Interpreter::showSaveLoadDialog(bool saveFlag) {
 
 	if ((_saveSlot >= 0) && saveFlag) {
 		Common::String result(dialog->getResultString());
-		if (!result.empty())
-			strncpy(_saveDescription, result.c_str(), 99);
-		else {
+		if (result.empty()) {
 			// If the user was lazy and entered no save name, come up with a default name.
-			char buf[20];
-			snprintf(buf, 20, "Save %d", _saveSlot + 1);
-
-			strcpy(_saveDescription, buf);
+			result = Common::String::format("Save %d", _saveSlot + 1);
 		}
+		strncpy(_saveDescription, result.c_str(), 99);
 	}
 
 	delete dialog;
