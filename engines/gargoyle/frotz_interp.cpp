@@ -285,7 +285,7 @@ void FrotzInterpreter::initInterpVars() {
  * Setup the custom font needed 
  */
 void FrotzInterpreter::init_fonts() {
-	_gfxFont = new Graphics::NewFont(infocomGfxFont);
+	_gfxFont = new Graphics::BdfFont(infocomGfxFont);
 	FontMan.assignFontToName(S_GFX_CHAR_FONT, _gfxFont);
 }
 
