@@ -33,6 +33,10 @@
 #include "common/config-manager.h"
 #include "common/textconsole.h"
 
+#ifdef MAEMO_SDL
+#include "backends/graphics/sdl/sdl-graphics.h"
+#endif
+
 // FIXME move joystick defines out and replace with confile file options
 // we should really allow users to map any key to a joystick button
 #define JOY_DEADZONE 3200
@@ -261,8 +265,13 @@ bool SdlEventSource::dispatchSDLEvent(SDL_Event &ev, Common::Event &event) {
 
 bool SdlEventSource::handleKeyDown(SDL_Event &ev, Common::Event &event) {
 
+#ifdef MAEMO_SDL
+// we want to remap first including ctr/shift/alt modifiers
+	const bool event_complete = remapKey(ev, event);
+	SDLModToOSystemKeyFlags(ev.key.keysym.mod, event);
+#else
 	SDLModToOSystemKeyFlags(SDL_GetModState(), event);
-
+#endif
 	// Handle scroll lock as a key modifier
 	if (ev.key.keysym.sym == SDLK_SCROLLOCK)
 		_scrollLock = !_scrollLock;
@@ -270,11 +279,15 @@ bool SdlEventSource::handleKeyDown(SDL_Event &ev, Common::Event &event) {
 	if (_scrollLock)
 		event.kbd.flags |= Common::KBD_SCRL;
 
+#ifndef MAEMO_SDL
 	// Ctrl-m toggles mouse capture
 	if (event.kbd.hasFlags(Common::KBD_CTRL) && ev.key.keysym.sym == 'm') {
 		toggleMouseGrab();
 		return false;
 	}
+#else
+// mouse capture makes no sense for Maemo and ctrl+m is used for global menu
+#endif
 
 #if defined(MACOSX)
 	// On Macintosh, Cmd-Q quits
@@ -302,7 +315,11 @@ bool SdlEventSource::handleKeyDown(SDL_Event &ev, Common::Event &event) {
 		return true;
 	}
 
+#ifdef MAEMO_SDL
+	if (event_complete)
+#else
 	if (remapKey(ev, event))
+#endif
 		return true;
 
 	event.type = Common::EVENT_KEYDOWN;
@@ -354,8 +371,12 @@ bool SdlEventSource::handleKeyUp(SDL_Event &ev, Common::Event &event) {
 	event.kbd.ascii = mapKey(ev.key.keysym.sym, ev.key.keysym.mod, ev.key.keysym.unicode);
 
 	// Ctrl-Alt-<key> will change the GFX mode
+#ifdef MAEMO_SDL
+	// we can't call SDL_GetModState(), modifiers can be remapped too
+	SDLModToOSystemKeyFlags(ev.key.keysym.mod, event);
+#else
 	SDLModToOSystemKeyFlags(mod, event);
-
+#endif
 	// Set the scroll lock sticky flag
 	if (_scrollLock)
 		event.kbd.flags |= Common::KBD_SCRL;
@@ -371,8 +392,20 @@ bool SdlEventSource::handleMouseMotion(SDL_Event &ev, Common::Event &event) {
 }
 
 bool SdlEventSource::handleMouseButtonDown(SDL_Event &ev, Common::Event &event) {
+#ifdef MAEMO_SDL
+	if (ev.button.button == SDL_BUTTON_LEFT){
+	SDLMod mod=SDL_GetModState();
+	if (mod & KMOD_SHIFT)
+		event.type = Common::EVENT_RBUTTONDOWN;
+	else if ( mod & KMOD_CTRL)
+		event.type = Common::EVENT_MOUSEMOVE;
+	else
+		event.type = Common::EVENT_LBUTTONDOWN;
+	}
+#else
 	if (ev.button.button == SDL_BUTTON_LEFT)
 		event.type = Common::EVENT_LBUTTONDOWN;
+#endif
 	else if (ev.button.button == SDL_BUTTON_RIGHT)
 		event.type = Common::EVENT_RBUTTONDOWN;
 #if defined(SDL_BUTTON_WHEELUP) && defined(SDL_BUTTON_WHEELDOWN)
@@ -388,14 +421,33 @@ bool SdlEventSource::handleMouseButtonDown(SDL_Event &ev, Common::Event &event) 
 	else
 		return false;
 
+#ifdef MAEMO_SDL
+	// we have touchscreen so we may have no mousemotion events between taps
+	((SdlGraphicsManager *)((OSystem_SDL *)g_system)->getGraphicsManager())->setMousePos(event.mouse.x, event.mouse.y);
+	// this is trying to fix wrong action done by mouse click in some engines
+	// it looks like clicking affects objects in previous mouse position
+	// if this does not help we should perhaps generate some fake mouse motion event(s)
+#endif
 	fillMouseEvent(event, ev.button.x, ev.button.y);
 
 	return true;
 }
 
 bool SdlEventSource::handleMouseButtonUp(SDL_Event &ev, Common::Event &event) {
+#ifdef MAEMO_SDL
+	if (ev.button.button == SDL_BUTTON_LEFT){
+		SDLMod mod=SDL_GetModState();
+		if (mod & KMOD_SHIFT)
+			event.type = Common::EVENT_RBUTTONUP;
+		else if ( mod & KMOD_CTRL)
+			event.type = Common::EVENT_MOUSEMOVE;
+		else
+			event.type = Common::EVENT_LBUTTONUP;
+	}
+#else
 	if (ev.button.button == SDL_BUTTON_LEFT)
 		event.type = Common::EVENT_LBUTTONUP;
+#endif
 	else if (ev.button.button == SDL_BUTTON_RIGHT)
 		event.type = Common::EVENT_RBUTTONUP;
 #if defined(SDL_BUTTON_MIDDLE)
@@ -519,7 +571,205 @@ bool SdlEventSource::handleJoyAxisMotion(SDL_Event &ev, Common::Event &event) {
 	return true;
 }
 
+// called on SDL KEYUP and KEYDOWN events
 bool SdlEventSource::remapKey(SDL_Event &ev, Common::Event &event) {
+#ifdef MAEMO_SDL
+	static int engine=0;
+#define	ENG_OTHER	-1
+//#define	ENG_SCUMM	1
+	static int game=0;
+#define GAME_OTHER	-1
+#define GAME_LURE	1
+#define GAME_SWORD1	2
+#define GAME_SWORD2	3
+#define GAME_SAGA	4
+#define GAME_FW		5
+//#define GAME_SIMON1	6
+//#define GAME_SIMON2	7
+#define GAME_FEEBLE	8
+//#define GAME_TOUCHE	9
+#define GAME_DISCWORLD	10
+#define GAME_CRUISE	11
+
+
+	if (engine == 0){
+		// one time initialization
+		Common::String gameid(ConfMan.get("gameid"));
+		if (gameid.hasPrefix("lure")) {
+			game=GAME_LURE;
+			engine=ENG_OTHER;
+		} else if (gameid.hasPrefix("sword2")) {
+			game=GAME_SWORD2;
+			engine=ENG_OTHER;
+		} else if (gameid.hasPrefix("cine")) {
+			game=GAME_FW;
+			engine=ENG_OTHER;
+/*		} else if (gameid == "touche") {
+			game=GAME_TOUCHE;
+			engine=ENG_OTHER;
+		} else if (gameid == "simon1") {
+			game=GAME_SIMON1;
+			engine=ENG_OTHER;
+		} else if (gameid == "simon2") {
+			game=GAME_SIMON2;
+			engine=ENG_OTHER;
+*/
+		} else if (gameid.hasPrefix("feeble")) {
+			game=GAME_FEEBLE;
+			engine=ENG_OTHER;
+		} else if (gameid.hasPrefix("sword1")) {
+			game=GAME_SWORD1;
+			engine=ENG_OTHER;
+		} else if (gameid.hasPrefix("saga")) {
+			game=GAME_SAGA;
+			engine=ENG_OTHER;
+		} else if (gameid.hasPrefix("tinsel")) {
+			game=GAME_DISCWORLD;
+			engine=ENG_OTHER;
+		} else if (gameid.hasPrefix("cruise")) {
+			game=GAME_CRUISE;
+			engine=ENG_OTHER;
+		} else {
+			game=GAME_OTHER;
+			engine=ENG_OTHER;
+		}
+	}
+	// global mapping - N810, N900
+	int _have_keyboard = ((SdlGraphicsManager *)((OSystem_SDL *)g_system)->getGraphicsManager())->_have_keyboard;
+	SdlGraphicsManager::MousePos _mouseCurState = ((SdlGraphicsManager *)((OSystem_SDL *)g_system)->getGraphicsManager())->_mouseCurState;
+	if (_have_keyboard && (ev.key.keysym.mod & KMOD_CTRL)){
+		// map ctrl-m to ctrl F5 = global scummvm menu
+		if (ev.key.keysym.sym==SDLK_m) ev.key.keysym.sym=SDLK_F5 ;
+	}
+        if (_have_keyboard && (ev.key.keysym.mod & KMOD_SHIFT)){
+                // map shift backspace to escape, shift enter to menu key
+                if (ev.key.keysym.sym==SDLK_BACKSPACE) { ev.key.keysym.sym=SDLK_ESCAPE ; ev.key.keysym.mod = (SDLMod) (ev.key.keysym.mod & ~KMOD_SHIFT); }
+                if (ev.key.keysym.sym==SDLK_KP_ENTER) { ev.key.keysym.sym=SDLK_F4; ev.key.keysym.mod = (SDLMod) (ev.key.keysym.mod & ~KMOD_SHIFT); }
+        }
+
+	// engine specific mappings
+	switch (engine){
+		// nothing now
+	}
+	// game specific mapping
+	switch (game) {
+		case GAME_LURE:
+			if ((ev.key.keysym.sym==SDLK_F8 && _have_keyboard ) || (ev.key.keysym.sym==SDLK_F4 && !_have_keyboard)){
+				// map zoom - to right click if we have keyboard (N810), otherwise map menu key (770,N800)
+				event.type = ((ev.type==SDL_KEYUP) ? Common::EVENT_RBUTTONUP : Common::EVENT_RBUTTONDOWN );
+				event.mouse.x = _mouseCurState.x;
+				event.mouse.y = _mouseCurState.y;
+				return true;
+
+			}
+			switch(ev.key.keysym.sym){
+				case SDLK_F5: // map F5 (home key) to f9 = restart game
+					ev.key.keysym.sym=SDLK_F9;
+					break;
+				case SDLK_F8: // map F8 (zoom - key) to F5 (save dialog) in game
+					ev.key.keysym.sym=SDLK_F5;
+					break;
+				case SDLK_F4: // same as above, only one mapping happens due to right click maping above
+					ev.key.keysym.sym=SDLK_F5;
+				default:
+					;
+			}
+			break;
+		case GAME_FW:
+			// Future Wars - no mapping here, done in game engine
+			break;
+		case GAME_FEEBLE:
+			if ((ev.key.keysym.sym==SDLK_F8 && _have_keyboard ) || (ev.key.keysym.sym==SDLK_F4 && !_have_keyboard)){
+				// map zoom - to right click if we have keyboard (N810), otherwise map menu key (770,N800)
+				event.type = ((ev.type==SDL_KEYUP) ? Common::EVENT_RBUTTONUP : Common::EVENT_RBUTTONDOWN );
+				event.mouse.x = _mouseCurState.x;
+				event.mouse.y = _mouseCurState.y;
+				return true;
+
+			}
+			if (!_have_keyboard) switch(ev.key.keysym.sym){
+				case SDLK_F7: // map F7 (zoom + key) to letter y
+					ev.key.keysym.sym=SDLK_y;
+					break;
+				case SDLK_F8: // map F8 (zoom - key) to letter 1
+					ev.key.keysym.sym=SDLK_1;
+					break;
+				default:
+					;
+			}
+			break;
+		case GAME_DISCWORLD:
+			switch(ev.key.keysym.sym) {
+				case SDLK_F8: // map F8 (zoom - key) to right click
+					event.type = ((ev.type==SDL_KEYUP) ? Common::EVENT_RBUTTONUP : Common::EVENT_RBUTTONDOWN );
+					event.mouse.x = _mouseCurState.x;
+					event.mouse.y = _mouseCurState.y;
+					return true;
+				// now map F7 (=zoom+) to Enter for N810 (useful when closed)
+				case SDLK_F7:
+					if (_have_keyboard) ev.key.keysym.sym=SDLK_RETURN; else ev.key.keysym.sym=SDLK_y;
+					break;
+				case SDLK_F4: // map menu key to game menu
+				case SDLK_F5: // swap/home key too
+					ev.key.keysym.sym=SDLK_F1;
+					break;
+				default:
+					;
+			}
+			break;
+		case GAME_CRUISE:
+			switch(ev.key.keysym.sym) {
+				case SDLK_F8: // map F8 (zoom - key) to right click
+					event.type = ((ev.type==SDL_KEYUP) ? Common::EVENT_RBUTTONUP : Common::EVENT_RBUTTONDOWN );
+					event.mouse.x = _mouseCurState.x;
+					event.mouse.y = _mouseCurState.y;
+					return true;
+				// now map F7 (=zoom+) to menu for N810 (useful when closed)
+				case SDLK_F7:
+					if (_have_keyboard) ev.key.keysym.sym=SDLK_F10; else ev.key.keysym.sym=SDLK_p;
+					break;
+				case SDLK_F4: // map menu key to game menu
+					ev.key.keysym.sym=SDLK_F10;
+					break;
+				default:
+					;
+			}
+			break;
+		default:
+		//case GAME_SWORD2:
+		//case GAME_SWORD1:
+		//case GAME_SAGA: //I Have No Mouth
+			if (!_have_keyboard) switch(ev.key.keysym.sym){
+				case SDLK_F7: // map F7 (zoom + key) to letter y for save game entry and 'yes' replies (simon, touche)
+					ev.key.keysym.sym=SDLK_y;
+					break;
+				case SDLK_F8: // map F8 (zoom - key) to letter 1 for save game entry and copyprotection in monkey2
+					ev.key.keysym.sym=SDLK_1;
+					break;
+				default:
+					;
+			} else switch(ev.key.keysym.sym) {
+				case SDLK_F8: // map F8 (zoom - key) to right click
+					event.type = ((ev.type==SDL_KEYUP) ? Common::EVENT_RBUTTONUP : Common::EVENT_RBUTTONDOWN );
+					event.mouse.x = _mouseCurState.x;
+					event.mouse.y = _mouseCurState.y;
+					return true;
+				// now map F7 (=zoom+) to menu (=F4) so we can have same mapping for N810 and 770/800 for menu key
+				// N800's real menu key is hidden on retractable keyboard so we use zoom+ for it instead too
+				case SDLK_F7:
+					ev.key.keysym.sym=SDLK_F4;
+					break;
+				/* with real keyboard we can afford to lose F7, do not remap F4 back
+				case SDLK_F4:
+					ev.key.keysym.sym=SDLK_F7;
+					break; */
+				default:
+					;
+			}
+			break;
+	}
+#endif //SDL_MAEMO
+
 #ifdef LINUPY
 	// On Yopy map the End button to quit
 	if ((ev.key.keysym.sym == 293)) {

@@ -47,6 +47,10 @@
 #include "icons/scummvm.xpm"
 
 #include <time.h>	// for getTimeAndDate()
+#ifdef        MAEMO_SDL
+#include <SDL/SDL_syswm.h>
+#include <X11/Xutil.h>
+#endif
 
 #ifdef USE_DETECTLANG
 #ifndef WIN32
@@ -205,6 +209,14 @@ void OSystem_SDL::initBackend() {
 	// Setup a custom program icon.
 	setupIcon();
 
+#ifdef        MAEMO_SDL
+	// some keymappings are done differently for devices with full keyboard (N810=RX-34)
+	((SdlGraphicsManager *)_graphicsManager)->_have_keyboard = 0;
+	char *device=getenv("SCUMMVM_MAEMO_DEVICE");
+	if (device != NULL)
+	if ( (strcmp(device,"RX-44") == 0) || (strcmp(device,"RX-48") == 0) || (strcmp(device,"RX-51") == 0))
+		((SdlGraphicsManager *)_graphicsManager)->_have_keyboard = 1;
+#endif
 	_inited = true;
 }
 
@@ -274,6 +286,11 @@ void OSystem_SDL::setWindowCaption(const char *caption) {
 	}
 
 	SDL_WM_SetCaption(cap.c_str(), cap.c_str());
+#ifdef MAEMO_SDL
+	Common::String cap2("ScummVM - "); // 2 lines in OS2008 task switcher, set first line
+	cap=cap2+cap;
+	((SdlGraphicsManager *)_graphicsManager)->setXWindowName(cap.c_str());
+#endif
 }
 
 void OSystem_SDL::quit() {
@@ -374,6 +391,14 @@ Common::String OSystem_SDL::getSystemLanguage() const {
 #endif // USE_DETECTLANG
 }
 
+#ifdef MAEMO_SDL
+// no Maemo version needs setupIcon
+// also N900 is hit by SDL_WM_SetIcon bug (window cannot receive input)
+// http://bugzilla.libsdl.org/show_bug.cgi?id=586
+void OSystem_SDL::setupIcon() {
+    ;
+}
+#else
 void OSystem_SDL::setupIcon() {
 	int x, y, w, h, ncols, nbytes, i;
 	unsigned int rgba[256];
@@ -381,7 +406,7 @@ void OSystem_SDL::setupIcon() {
 
 	if (sscanf(scummvm_icon[0], "%d %d %d %d", &w, &h, &ncols, &nbytes) != 4) {
 		warning("Wrong format of scummvm_icon[0] (%s)", scummvm_icon[0]);
-		
+
 		return;
 	}
 	if ((w > 512) || (h > 512) || (ncols > 255) || (nbytes > 1)) {
@@ -433,6 +458,7 @@ void OSystem_SDL::setupIcon() {
 	SDL_FreeSurface(sdl_surf);
 	free(icon);
 }
+#endif
 
 uint32 OSystem_SDL::getMillis() {
 	uint32 millis = SDL_GetTicks();

@@ -103,9 +103,15 @@ public:
 
 	virtual void beginGFXTransaction();
 	virtual OSystem::TransactionError endGFXTransaction();
-	
+
 	virtual int16 getHeight();
 	virtual int16 getWidth();
+
+#ifdef  MAEMO_SDL
+	void setXWindowName(const char *caption);
+	friend class SdlEventSource;
+	friend class OSystem_SDL;
+#endif
 
 protected:
 	// PaletteManager API
@@ -136,7 +142,7 @@ public:
 	virtual void setMouseCursor(const byte *buf, uint w, uint h, int hotspotX, int hotspotY, uint32 keycolor, int cursorTargetScale = 1, const Graphics::PixelFormat *format = NULL);
 	virtual void setCursorPalette(const byte *colors, uint start, uint num);
 	virtual void disableCursorPalette(bool disable);
-	
+
 #ifdef USE_OSD
 	virtual void displayMessageOnOSD(const char *msg);
 #endif
@@ -153,7 +159,7 @@ protected:
 	/** Transparency level of the OSD */
 	uint8 _osdAlpha;
 	/** When to start the fade out */
-	uint32 _osdFadeStartTime; 
+	uint32 _osdFadeStartTime;
 	/** Enum with OSD options */
 	enum {
 		kOSDFadeOutDelay = 2 * 1000,	/** < Delay before the OSD is faded out (in milliseconds) */
@@ -337,6 +343,10 @@ protected:
 	virtual void setMousePos(int x, int y);
 	virtual void toggleFullScreen();
 	virtual bool saveScreenshot(const char *filename);
+
+#ifdef MAEMO_SDL
+        int _have_keyboard;
+#endif
 };
 
 #endif

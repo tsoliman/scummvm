@@ -310,6 +310,13 @@ void ToucheEngine::processEvents(bool handleKeyEvents) {
 	while (_eventMan->pollEvent(event)) {
 		switch (event.type) {
 		case Common::EVENT_KEYDOWN:
+#ifdef	MAEMO_SDL
+			if (event.kbd.keycode == 13) { // select button simulates righ button toggle
+				_inp_rightMouseButtonPressed=!_inp_rightMouseButtonPressed;
+			} else {
+				_inp_rightMouseButtonPressed = false;
+			}
+#endif
 			if (!handleKeyEvents) {
 				break;
 			}
@@ -320,10 +327,18 @@ void ToucheEngine::processEvents(bool handleKeyEvents) {
 						quitGame();
 					}
 				}
+#ifdef	MAEMO_SDL
+			} else if (event.kbd.keycode == Common::KEYCODE_F4) {
+#else
 			} else if (event.kbd.keycode == Common::KEYCODE_F5) {
+#endif
 				if (_flagsTable[618] == 0 && !_hideInventoryTexts) {
 					handleOptions(0);
 				}
+#ifdef	MAEMO_SDL
+			} else if (event.kbd.keycode == Common::KEYCODE_F8) {
+				_fastWalkMode = !_fastWalkMode;
+#endif
 			} else if (event.kbd.keycode == Common::KEYCODE_F9) {
 				_fastWalkMode = true;
 			} else if (event.kbd.keycode == Common::KEYCODE_F10) {
@@ -351,12 +366,22 @@ void ToucheEngine::processEvents(bool handleKeyEvents) {
 		case Common::EVENT_LBUTTONDOWN:
 			_inp_leftMouseButtonPressed = true;
 			break;
+#ifdef	MAEMO_SDL
+		case Common::EVENT_LBUTTONUP:
+			// this is done elsewhere _inp_leftMouseButtonPressed = false;
+			_inp_rightMouseButtonPressed = false; // simulate rbutton up to close menu
+			break;
+		case Common::EVENT_RBUTTONDOWN:
+			_inp_rightMouseButtonPressed = !_inp_rightMouseButtonPressed;
+			break;
+#else
 		case Common::EVENT_RBUTTONDOWN:
 			_inp_rightMouseButtonPressed = true;
 			break;
 		case Common::EVENT_RBUTTONUP:
 			_inp_rightMouseButtonPressed = false;
 			break;
+#endif
 		default:
 			break;
 		}

@@ -119,6 +119,10 @@ void Util::processInput(bool scroll) {
 			_mouseButtons = (MouseButtons) (((uint32) _mouseButtons) & ~((uint32) kMouseButtonsRight));
 			break;
 		case Common::EVENT_KEYDOWN:
+#ifdef MAEMO_SDL
+			if (event.kbd.keycode==Common::KEYCODE_F4)
+				_mouseButtons = (MouseButtons) (((uint32) _mouseButtons) | ((uint32) kMouseButtonsRight));
+#endif
 			if (event.kbd.hasFlags(Common::KBD_CTRL)) {
 				if (event.kbd.keycode == Common::KEYCODE_f)
 					_fastMode ^= 1;
@@ -135,6 +139,10 @@ void Util::processInput(bool scroll) {
 			addKeyToBuffer(event.kbd);
 			break;
 		case Common::EVENT_KEYUP:
+#ifdef MAEMO_SDL
+			if (event.kbd.keycode==Common::KEYCODE_F4)
+				_mouseButtons = (MouseButtons) (((uint32) _mouseButtons) & ~((uint32) kMouseButtonsRight));
+#endif
 			break;
 		default:
 			break;

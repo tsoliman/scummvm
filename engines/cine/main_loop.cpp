@@ -75,18 +75,27 @@ static void processEvent(Common::Event &event) {
 				mouseRight = 1;
 			}
 			break;
+#ifdef	MAEMO_SDL
+		case Common::KEYCODE_UP:
+#else
 		case Common::KEYCODE_F1:
+#endif
 			if (allowPlayerInput) {
 				playerCommand = 0; // EXAMINE
 				makeCommandLine();
 			}
 			break;
+#ifdef	MAEMO_SDL
+		case Common::KEYCODE_DOWN:
+#else
 		case Common::KEYCODE_F2:
+#endif
 			if (allowPlayerInput) {
 				playerCommand = 1; // TAKE
 				makeCommandLine();
 			}
 			break;
+#ifndef	MAEMO_SDL
 		case Common::KEYCODE_F3:
 			if (allowPlayerInput) {
 				playerCommand = 2; // INVENTORY
@@ -99,13 +108,43 @@ static void processEvent(Common::Event &event) {
 				makeCommandLine();
 			}
 			break;
+#else
+//map f3, f4 to f8,f7 = zoom +- keys, when in menu generate keypresses for savegame
+		case Common::KEYCODE_F8:
+			if (inMenu)
+				lastKeyStroke = '1';
+			else if (allowPlayerInput) {
+				playerCommand = 2; // INVENTORY
+				makeCommandLine();
+			}
+			break;
+		case Common::KEYCODE_F7:
+			if (inMenu)
+				lastKeyStroke = '2';
+			else 
+			if (allowPlayerInput) {
+				playerCommand = 3; // USE
+				makeCommandLine();
+			}
+			break;
+#endif
+#ifdef	MAEMO_SDL
+		case Common::KEYCODE_LEFT:
+//			if (event.kbd.flags&Common::KBD_SHIFT)
+//				moveUsingKeyboard(-1, 0); // Left
+#else
 		case Common::KEYCODE_F5:
+#endif
 			if (allowPlayerInput) {
 				playerCommand = 4; // ACTIVATE
 				makeCommandLine();
 			}
 			break;
+#ifdef	MAEMO_SDL
+		case Common::KEYCODE_RIGHT:
+#else
 		case Common::KEYCODE_F6:
+#endif
 			if (allowPlayerInput) {
 				playerCommand = 5; // SPEAK
 				makeCommandLine();
@@ -117,7 +156,11 @@ static void processEvent(Common::Event &event) {
 				makeCommandLine();
 			}
 			break;
+#ifdef	MAEMO_SDL
+		case Common::KEYCODE_F4: // Menu key
+#else
 		case Common::KEYCODE_F10:
+#endif
 			if (!disableSystemMenu && !inMenu) {
 				g_cine->makeSystemMenu();
 			}
@@ -133,19 +176,19 @@ static void processEvent(Common::Event &event) {
 		case Common::KEYCODE_KP_PLUS:
 			g_cine->modifyGameSpeed(+1); // Faster
 			break;
-		case Common::KEYCODE_LEFT:
+//		case Common::KEYCODE_LEFT:
 		case Common::KEYCODE_KP4:
 			moveUsingKeyboard(-1, 0); // Left
 			break;
-		case Common::KEYCODE_RIGHT:
+//		case Common::KEYCODE_RIGHT:
 		case Common::KEYCODE_KP6:
 			moveUsingKeyboard(+1, 0); // Right
 			break;
-		case Common::KEYCODE_UP:
+//		case Common::KEYCODE_UP:
 		case Common::KEYCODE_KP8:
 			moveUsingKeyboard(0, +1); // Up
 			break;
-		case Common::KEYCODE_DOWN:
+//		case Common::KEYCODE_DOWN:
 		case Common::KEYCODE_KP2:
 			moveUsingKeyboard(0, -1); // Down
 			break;

@@ -43,6 +43,10 @@
 #include "graphics/scaler.h"
 #include "graphics/scaler/aspect.h"
 #include "graphics/surface.h"
+#ifdef        MAEMO_SDL
+#include <SDL/SDL_syswm.h>
+#include <X11/Xutil.h>
+#endif
 
 static const OSystem::GraphicsMode s_supportedGraphicsModes[] = {
 	{"1x", _s("Normal (no scaling)"), GFX_NORMAL},
@@ -710,6 +714,63 @@ static void fixupResolutionForAspectRatio(AspectRatio desiredAspectRatio, int &w
 	height = bestMode->h;
 }
 
+#ifdef  MAEMO_SDL
+#include "SDL_syswm.h"
+
+static void maemo5_WM_init(int fullscreen){
+//static int fsdone=0;
+//static int wmdone=0;
+SDL_SysWMinfo info;
+
+SDL_VERSION(&info.version);
+
+if ( SDL_GetWMInfo(&info) ) {
+
+        Display *dpy = info.info.x11.display;
+
+        Window win;
+
+        unsigned long val = 1;
+        Atom atom_zoom = XInternAtom(dpy, "_HILDON_ZOOM_KEY_ATOM", 0);
+        info.info.x11.lock_func();
+        win = info.info.x11.fswindow;
+
+        if (win)
+                XChangeProperty (dpy,win,atom_zoom,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1); // grab zoom keys
+        win = info.info.x11.wmwindow;
+
+        if (win)
+                XChangeProperty (dpy,win,atom_zoom,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1); // grab zoom keys
+#if 0
+        if (win && fullscreen /* && !fsdone */ ) {
+                XUnmapWindow(dpy,win);
+                XChangeProperty (dpy,win,atom_zoom,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1); // grab zoom keys
+
+                Atom atom_noncomposited = XInternAtom(dpy, "_HILDON_NON_COMPOSITED_WINDOW", 0);
+                Atom atom_wmstate = XInternAtom(dpy, "_NET_WM_STATE", 0);
+                Atom atom_wmstate_fullscreen = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", 0);
+                XSetWindowAttributes xattr;
+                xattr.override_redirect = False;
+                XChangeProperty (dpy,win,atom_noncomposited,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1); // make window not composited
+                //XChangeWindowAttributes(dpy, win, CWOverrideRedirect, &xattr); //
+                XChangeProperty (dpy,win,atom_wmstate,XA_ATOM,32,PropModeReplace,(unsigned char *) &atom_wmstate_fullscreen,1); // mark as fullscreen = disable tskswitch button
+                XMapWindow(dpy,win);
+                //fsdone=1;
+        }
+        win = info.info.x11.wmwindow;
+        if (win && !fullscreen /* && !wmdone */) {
+                XUnmapWindow(dpy,win);
+                XChangeProperty (dpy,win,atom_zoom,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1);
+                XMapWindow(dpy,win);
+                //wmdone=1;
+        }
+#endif
+        info.info.x11.unlock_func();
+//      XSync(dpy,False);
+}
+}
+#endif
+
 bool SdlGraphicsManager::loadGFXMode() {
 	_forceFull = true;
 
@@ -749,6 +810,9 @@ bool SdlGraphicsManager::loadGFXMode() {
 		error("allocating _screen failed");
 #endif
 
+#ifdef  MAEMO_SDL
+        maemo5_WM_init(_videoMode.fullscreen);
+#endif
 	//
 	// Create the surface that contains the scaled graphics in 16 bit mode
 	//
@@ -1205,6 +1269,14 @@ void SdlGraphicsManager::setFullscreenMode(bool enable) {
 		_videoMode.fullscreen = enable;
 		_transactionDetails.needHotswap = true;
 	}
+#ifdef MAEMO_SDL
+	char *caption;
+	char title[50];
+	title[49] = '\0';
+	SDL_WM_GetCaption(&caption, NULL);
+	if (caption!=NULL) {strncpy(title,caption,49);
+	setXWindowName(caption); }
+#endif
 }
 
 void SdlGraphicsManager::setAspectRatioCorrection(bool enable) {
@@ -2253,14 +2325,19 @@ void SdlGraphicsManager::toggleFullScreen() {
 bool SdlGraphicsManager::notifyEvent(const Common::Event &event) {
 	switch ((int)event.type) {
 	case Common::EVENT_KEYDOWN:
-		// Alt-Return and Alt-Enter toggle full screen mode
+#ifdef MAEMO_SDL
+		// fullscreen button or ctrl+space toggle full screen mode
+		if (event.kbd.keycode == (Common::KeyCode)SDLK_F6 ||
+			(_have_keyboard && event.kbd.hasFlags(Common::KBD_CTRL) &&
+			(event.kbd.keycode == (Common::KeyCode)SDLK_SPACE) ) ) {
+#else		// Alt-Return and Alt-Enter toggle full screen mode
 		if (event.kbd.hasFlags(Common::KBD_ALT) &&
 			(event.kbd.keycode == Common::KEYCODE_RETURN ||
 			event.kbd.keycode == (Common::KeyCode)SDLK_KP_ENTER)) {
+#endif
 			toggleFullScreen();
 			return true;
 		}
-
 		// Alt-S: Create a screenshot
 		if (event.kbd.hasFlags(Common::KBD_ALT) && event.kbd.keycode == 's') {
 			char filename[20];
@@ -2312,5 +2389,23 @@ bool SdlGraphicsManager::notifyEvent(const Common::Event &event) {
 
 	return false;
 }
+
+#ifdef MAEMO_SDL
+void SdlGraphicsManager::setXWindowName(const char *caption) {
+        SDL_SysWMinfo info;
+        SDL_VERSION(&info.version);
+        if ( SDL_GetWMInfo(&info) ) {
+                Display *dpy = info.info.x11.display;
+                Window win;
+                //if (_videoMode.fullscreen)
+                win = info.info.x11.fswindow;
+                if (win) XStoreName(dpy, win, caption);
+                //else
+                win = info.info.x11.wmwindow;
+                if (win) XStoreName(dpy, win, caption);
+        }
+}
+
+#endif
 
 #endif

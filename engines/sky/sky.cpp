@@ -404,6 +404,17 @@ void SkyEngine::delay(int32 amount) {
 			switch (event.type) {
 			case Common::EVENT_KEYDOWN:
 				_keyPressed = event.kbd;
+#ifdef	MAEMO_SDL
+				// Maemo platform keybindings
+				if (_keyPressed.keycode == Common::KEYCODE_F4) // Map F4 (menu) to F5 (access main menu)
+					_keyPressed.keycode = Common::KEYCODE_F5;
+				if (_keyPressed.ascii == 13) // Map Select=Enter to right mouse button
+					_skyMouse->buttonPressed(1);
+				if (_keyPressed.keycode == Common::KEYCODE_F8) // Map F8 (zoom out) to toggle fast mode
+					_fastMode ^= 1;
+				if (_keyPressed.keycode == Common::KEYCODE_DOWN) // Map Down to . (skip one line of dialog)
+					_keyPressed.ascii = '.';
+#endif
 				break;
 			case Common::EVENT_MOUSEMOVE:
 				if (!(_systemVars.systemFlags & SF_MOUSE_LOCKED))

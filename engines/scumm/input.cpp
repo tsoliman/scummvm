@@ -135,7 +135,20 @@ void ScummEngine::parseEvent(Common::Event event) {
 			// Normal key press, pass on to the game.
 			_keyPressed = event.kbd;
 		}
-
+#ifdef MAEMO_SDL
+               switch (_keyPressed.keycode) {
+                       case Common::KEYCODE_F8: _fastMode ^= 1; break ;// Map F8 (zoom out) to toggle fast mode                                                                                             
+                       case Common::KEYCODE_F4: _keyPressed.keycode = Common::KEYCODE_F5; _keyPressed.ascii=Common::ASCII_F5 ; break; // map F4 to F5 (menu key)
+                       case Common::KEYCODE_RETURN: _keyPressed.keycode = Common::KEYCODE_TAB; _keyPressed.ascii=Common::ASCII_TAB ; break; // map Select (return) to Tab (right mouse button)
+                       default: ;
+               }
+               if (_game.version < 7) switch(event.kbd.keycode){
+                       case Common::KEYCODE_UP: _keyPressed.ascii = ' '; _keyPressed.keycode=Common::KEYCODE_SPACE; break ;// map Up to space (pause game)
+                       case Common::KEYCODE_DOWN: _keyPressed.ascii ='.'; _keyPressed.keycode=Common::KEYCODE_PERIOD; break ;// map Down to . (skip one line of dialog)
+                       default: ;
+               }
+#endif
+ 
 		// FIXME: We are using ASCII values to index the _keyDownMap here,
 		// yet later one code which checks _keyDownMap will use KEYCODEs
 		// to do so. That is, we are mixing ascii and keycode values here,
@@ -151,6 +164,20 @@ void ScummEngine::parseEvent(Common::Event event) {
 		break;
 
 	case Common::EVENT_KEYUP:
+#ifdef MAEMO_SDL
+                       // map keyup with similar rules as keydown
+                       switch (event.kbd.keycode) {
+
+                               case Common::KEYCODE_F4: event.kbd.keycode = Common::KEYCODE_F5; event.kbd.ascii=Common::ASCII_F5 ; break; // map F4 to F5 (menu key)
+                               case Common::KEYCODE_RETURN: event.kbd.keycode = Common::KEYCODE_TAB; event.kbd.ascii=Common::ASCII_TAB ; break; // map Select (return) to Tab (right mouse button)
+                               default: ;
+                       }
+                       if (_game.version < 7) switch(event.kbd.keycode){
+                               case Common::KEYCODE_UP: event.kbd.ascii = ' '; event.kbd.keycode=Common::KEYCODE_SPACE; break ;// map Up to space (pause game)
+                               case Common::KEYCODE_DOWN: event.kbd.ascii ='.'; event.kbd.keycode=Common::KEYCODE_PERIOD; break ;// map Down to . (skip one line of dialog)
+                               default: ;
+                       }
+#endif
 		if (event.kbd.ascii >= 512) {
 			debugC(DEBUG_GENERAL, "keyPressed > 512 (%d)", event.kbd.ascii);
 		} else {
@@ -513,9 +540,10 @@ void ScummEngine::processKeyboard(Common::KeyState lastKeyHit) {
 		if (VAR_SAVELOAD_SCRIPT != 0xFF && _currentRoom != 0)
 			runScript(VAR(VAR_SAVELOAD_SCRIPT2), 0, 0, 0);
 
+#ifndef MAEMO_SDL
 	} else if (restartKeyEnabled && (lastKeyHit.keycode == Common::KEYCODE_F8 && lastKeyHit.hasFlags(0))) {
 		confirmRestartDialog();
-
+#endif
 	} else if (pauseKeyEnabled && (lastKeyHit.keycode == Common::KEYCODE_SPACE && lastKeyHit.hasFlags(0))) {
 		pauseGame();
 

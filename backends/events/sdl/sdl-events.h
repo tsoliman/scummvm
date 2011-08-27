@@ -54,6 +54,8 @@ public:
 	 */
 	virtual void toggleMouseGrab();
 
+	friend class SdlGraphicsManager;
+
 protected:
 	/** @name Keyboard mouse emulation
 	 * Disabled by fingolfin 2004-12-18.

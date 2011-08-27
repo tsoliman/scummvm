@@ -1,0 +1,978 @@
+diff -ru scummvm-1.2.0-orig/backends/platform/sdl/events.cpp scummvm-1.2.0-maemo/backends/platform/sdl/events.cpp
+--- scummvm-1.2.0-orig/backends/platform/sdl/events.cpp	2010-06-16 11:22:54.000000000 +0400
++++ scummvm-1.2.0-maemo/backends/platform/sdl/events.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -26,6 +26,10 @@
+ #include "backends/platform/sdl/sdl.h"
+ #include "common/util.h"
+ #include "common/events.h"
++#ifdef MAEMO_SDL
++#include "common/config-manager.h"
++#endif
++
+ #include "graphics/scaler/aspect.h"	// for aspect2Real
+ 
+ // FIXME move joystick defines out and replace with confile file options
+@@ -234,8 +238,13 @@
+ 
+ bool OSystem_SDL::handleKeyDown(SDL_Event &ev, Common::Event &event) {
+ 
++#ifdef MAEMO_SDL
++// we want to remap first including ctr/shift/alt modifiers
++	const bool event_complete = remapKey(ev, event);
++	SDLModToOSystemKeyFlags(ev.key.keysym.mod, event);  
++#else
+ 	SDLModToOSystemKeyFlags(SDL_GetModState(), event);
+-
++#endif
+ 	// Handle scroll lock as a key modifier
+ 	if (ev.key.keysym.sym == SDLK_SCROLLOCK)
+ 		_scrollLock = !_scrollLock;
+@@ -243,8 +252,13 @@
+ 	if (_scrollLock)
+ 		event.kbd.flags |= Common::KBD_SCRL;
+ 
++#ifdef MAEMO_SDL
++	// fullscreen button or ctrl+space toggle full screen mode
++	if (ev.key.keysym.sym == SDLK_F6 || (_have_keyboard && event.kbd.hasFlags(Common::KBD_CTRL) && (ev.key.keysym.sym == SDLK_SPACE) ) ) {
++#else
+ 	// Alt-Return and Alt-Enter toggle full screen mode
+ 	if (event.kbd.hasFlags(Common::KBD_ALT) && (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_KP_ENTER)) {
++#endif
+ 		beginGFXTransaction();
+ 			setFullscreenMode(!_videoMode.fullscreen);
+ 		endGFXTransaction();
+@@ -278,11 +292,15 @@
+ 		return false;
+ 	}
+ 
++#ifndef MAEMO_SDL
+ 	// Ctrl-m toggles mouse capture
+ 	if (event.kbd.hasFlags(Common::KBD_CTRL) && ev.key.keysym.sym == 'm') {
+ 		toggleMouseGrab();
+ 		return false;
+ 	}
++#else
++// mouse capture makes no sense for Maemo and ctrl+m is used for global menu
++#endif
+ 
+ #if defined(MACOSX)
+ 	// On Macintosh', Cmd-Q quits
+@@ -315,7 +333,11 @@
+ 			return false;
+ 	}
+ 
++#ifdef MAEMO_SDL
++	if (event_complete)
++#else
+ 	if (remapKey(ev, event))
++#endif
+ 		return true;
+ 
+ 	event.type = Common::EVENT_KEYDOWN;
+@@ -334,7 +356,12 @@
+ 	event.kbd.ascii = mapKey(ev.key.keysym.sym, ev.key.keysym.mod, ev.key.keysym.unicode);
+ 
+ 	// Ctrl-Alt-<key> will change the GFX mode
++#ifdef MAEMO_SDL
++	// we can't call SDL_GetModState(), modifiers can be remapped too
++	SDLModToOSystemKeyFlags(ev.key.keysym.mod, event);  
++#else
+ 	SDLModToOSystemKeyFlags(SDL_GetModState(), event);
++#endif
+ 
+ 	// Set the scroll lock sticky flag
+ 	if (_scrollLock)
+@@ -356,8 +383,20 @@
+ }
+ 
+ bool OSystem_SDL::handleMouseButtonDown(SDL_Event &ev, Common::Event &event) {
++#ifdef	MAEMO_SDL
++	if (ev.button.button == SDL_BUTTON_LEFT){
++	SDLMod mod=SDL_GetModState();
++	if (mod & KMOD_SHIFT)
++		event.type = Common::EVENT_RBUTTONDOWN;
++	else if ( mod & KMOD_CTRL)
++		event.type = Common::EVENT_MOUSEMOVE;
++	else
++		event.type = Common::EVENT_LBUTTONDOWN;
++	}
++#else
+ 	if (ev.button.button == SDL_BUTTON_LEFT)
+ 		event.type = Common::EVENT_LBUTTONDOWN;
++#endif
+ 	else if (ev.button.button == SDL_BUTTON_RIGHT)
+ 		event.type = Common::EVENT_RBUTTONDOWN;
+ #if defined(SDL_BUTTON_WHEELUP) && defined(SDL_BUTTON_WHEELDOWN)
+@@ -373,14 +412,33 @@
+ 	else
+ 		return false;
+ 
++#ifdef MAEMO_SDL
++	// we have touchscreen so we may have no mousemotion events between taps
++	setMousePos(event.mouse.x, event.mouse.y);
++	// this is trying to fix wrong action done by mouse click in some engines
++	// it looks like clicking affects objects in previous mouse position
++	// if this does not help we should perhaps generate some fake mouse motion event(s) 
++#endif
+ 	fillMouseEvent(event, ev.button.x, ev.button.y);
+ 
+ 	return true;
+ }
+ 
+ bool OSystem_SDL::handleMouseButtonUp(SDL_Event &ev, Common::Event &event) {
++#ifdef	MAEMO_SDL
++	if (ev.button.button == SDL_BUTTON_LEFT){
++		SDLMod mod=SDL_GetModState();
++		if (mod & KMOD_SHIFT)
++			event.type = Common::EVENT_RBUTTONUP;
++		else if ( mod & KMOD_CTRL)
++			event.type = Common::EVENT_MOUSEMOVE;
++		else
++			event.type = Common::EVENT_LBUTTONUP;
++	}
++#else
+ 	if (ev.button.button == SDL_BUTTON_LEFT)
+ 		event.type = Common::EVENT_LBUTTONUP;
++#endif
+ 	else if (ev.button.button == SDL_BUTTON_RIGHT)
+ 		event.type = Common::EVENT_RBUTTONUP;
+ #if defined(SDL_BUTTON_MIDDLE)
+@@ -504,7 +562,203 @@
+ 	return true;
+ }
+ 
++// called on SDL KEYUP and KEYDOWN events
+ bool OSystem_SDL::remapKey(SDL_Event &ev, Common::Event &event) {
++#ifdef MAEMO_SDL
++	static int engine=0;
++#define	ENG_OTHER	-1
++//#define	ENG_SCUMM	1
++	static int game=0;
++#define GAME_OTHER	-1	
++#define GAME_LURE	1
++#define GAME_SWORD1	2
++#define GAME_SWORD2	3
++#define GAME_SAGA	4
++#define GAME_FW		5
++//#define GAME_SIMON1	6
++//#define GAME_SIMON2	7
++#define GAME_FEEBLE	8
++//#define GAME_TOUCHE	9
++#define GAME_DISCWORLD	10
++#define GAME_CRUISE	11
++
++
++	if (engine == 0){
++		// one time initialization
++		Common::String gameid(ConfMan.get("gameid"));
++		if (gameid.hasPrefix("lure")) {
++			game=GAME_LURE;
++			engine=ENG_OTHER;
++		} else if (gameid.hasPrefix("sword2")) {
++			game=GAME_SWORD2;
++			engine=ENG_OTHER;
++		} else if (gameid.hasPrefix("cine")) {
++			game=GAME_FW;
++			engine=ENG_OTHER;
++/*		} else if (gameid == "touche") {
++			game=GAME_TOUCHE;
++			engine=ENG_OTHER;
++		} else if (gameid == "simon1") {
++			game=GAME_SIMON1;
++			engine=ENG_OTHER;
++		} else if (gameid == "simon2") {
++			game=GAME_SIMON2;
++			engine=ENG_OTHER;
++*/
++		} else if (gameid.hasPrefix("feeble")) {
++			game=GAME_FEEBLE;
++			engine=ENG_OTHER;
++		} else if (gameid.hasPrefix("sword1")) {
++			game=GAME_SWORD1;
++			engine=ENG_OTHER;
++		} else if (gameid.hasPrefix("saga")) {
++			game=GAME_SAGA;
++			engine=ENG_OTHER;
++		} else if (gameid.hasPrefix("tinsel")) {
++			game=GAME_DISCWORLD;
++			engine=ENG_OTHER;
++		} else if (gameid.hasPrefix("cruise")) {
++			game=GAME_CRUISE;
++			engine=ENG_OTHER;
++		} else {
++			game=GAME_OTHER;
++			engine=ENG_OTHER;
++		}
++	}
++	// global mapping - N810, N900
++	if (_have_keyboard && (ev.key.keysym.mod & KMOD_CTRL)){
++		// map ctrl-m to ctrl F5 = global scummvm menu 
++		if (ev.key.keysym.sym==SDLK_m) ev.key.keysym.sym=SDLK_F5 ;
++	}
++        if (_have_keyboard && (ev.key.keysym.mod & KMOD_SHIFT)){
++                // map shift backspace to escape, shift enter to menu key
++                if (ev.key.keysym.sym==SDLK_BACKSPACE) { ev.key.keysym.sym=SDLK_ESCAPE ; ev.key.keysym.mod = (SDLMod) (ev.key.keysym.mod & ~KMOD_SHIFT); }
++                if (ev.key.keysym.sym==SDLK_KP_ENTER) { ev.key.keysym.sym=SDLK_F4; ev.key.keysym.mod = (SDLMod) (ev.key.keysym.mod & ~KMOD_SHIFT); }
++        }
++														 
++	// engine specific mappings
++	switch (engine){
++		// nothing now
++	}
++	// game specific mapping
++	switch (game) {
++		case GAME_LURE:
++			if ((ev.key.keysym.sym==SDLK_F8 && _have_keyboard ) || (ev.key.keysym.sym==SDLK_F4 && !_have_keyboard)){
++				// map zoom - to right click if we have keyboard (N810), otherwise map menu key (770,N800)
++				event.type = ((ev.type==SDL_KEYUP) ? Common::EVENT_RBUTTONUP : Common::EVENT_RBUTTONDOWN );
++				event.mouse.x = _mouseCurState.x;
++				event.mouse.y = _mouseCurState.y;
++				return true;			 
++			
++			}
++			switch(ev.key.keysym.sym){
++				case SDLK_F5: // map F5 (home key) to f9 = restart game
++					ev.key.keysym.sym=SDLK_F9;
++					break;
++				case SDLK_F8: // map F8 (zoom - key) to F5 (save dialog) in game
++					ev.key.keysym.sym=SDLK_F5;
++					break;
++				case SDLK_F4: // same as above, only one mapping happens due to right click maping above 
++					ev.key.keysym.sym=SDLK_F5;
++				default:
++					;
++			}
++			break;
++		case GAME_FW:
++			// Future Wars - no mapping here, done in game engine
++			break;
++		case GAME_FEEBLE:
++			if ((ev.key.keysym.sym==SDLK_F8 && _have_keyboard ) || (ev.key.keysym.sym==SDLK_F4 && !_have_keyboard)){
++				// map zoom - to right click if we have keyboard (N810), otherwise map menu key (770,N800)
++				event.type = ((ev.type==SDL_KEYUP) ? Common::EVENT_RBUTTONUP : Common::EVENT_RBUTTONDOWN );
++				event.mouse.x = _mouseCurState.x;
++				event.mouse.y = _mouseCurState.y;
++				return true;			 
++			
++			}
++			if (!_have_keyboard) switch(ev.key.keysym.sym){
++				case SDLK_F7: // map F7 (zoom + key) to letter y
++					ev.key.keysym.sym=SDLK_y;
++					break;
++				case SDLK_F8: // map F8 (zoom - key) to letter 1
++					ev.key.keysym.sym=SDLK_1;
++					break;
++				default:
++					;
++			} 
++			break;
++		case GAME_DISCWORLD:
++			switch(ev.key.keysym.sym) {
++				case SDLK_F8: // map F8 (zoom - key) to right click
++					event.type = ((ev.type==SDL_KEYUP) ? Common::EVENT_RBUTTONUP : Common::EVENT_RBUTTONDOWN );
++					event.mouse.x = _mouseCurState.x;
++					event.mouse.y = _mouseCurState.y;
++					return true;
++				// now map F7 (=zoom+) to Enter for N810 (useful when closed)				 
++				case SDLK_F7:
++					if (_have_keyboard) ev.key.keysym.sym=SDLK_RETURN; else ev.key.keysym.sym=SDLK_y;
++					break;
++				case SDLK_F4: // map menu key to game menu
++				case SDLK_F5: // swap/home key too
++					ev.key.keysym.sym=SDLK_F1;
++					break; 
++				default:
++					;			
++			}
++			break;
++		case GAME_CRUISE:
++			switch(ev.key.keysym.sym) {
++				case SDLK_F8: // map F8 (zoom - key) to right click
++					event.type = ((ev.type==SDL_KEYUP) ? Common::EVENT_RBUTTONUP : Common::EVENT_RBUTTONDOWN );
++					event.mouse.x = _mouseCurState.x;
++					event.mouse.y = _mouseCurState.y;
++					return true;
++				// now map F7 (=zoom+) to menu for N810 (useful when closed)				 
++				case SDLK_F7:
++					if (_have_keyboard) ev.key.keysym.sym=SDLK_F10; else ev.key.keysym.sym=SDLK_p;
++					break;
++				case SDLK_F4: // map menu key to game menu
++					ev.key.keysym.sym=SDLK_F10;
++					break; 
++				default:
++					;			
++			}
++			break;
++		default:
++		//case GAME_SWORD2:
++		//case GAME_SWORD1:
++		//case GAME_SAGA: //I Have No Mouth
++			if (!_have_keyboard) switch(ev.key.keysym.sym){
++				case SDLK_F7: // map F7 (zoom + key) to letter y for save game entry and 'yes' replies (simon, touche)
++					ev.key.keysym.sym=SDLK_y;
++					break;
++				case SDLK_F8: // map F8 (zoom - key) to letter 1 for save game entry and copyprotection in monkey2
++					ev.key.keysym.sym=SDLK_1;
++					break;
++				default:
++					;
++			} else switch(ev.key.keysym.sym) {
++				case SDLK_F8: // map F8 (zoom - key) to right click
++					event.type = ((ev.type==SDL_KEYUP) ? Common::EVENT_RBUTTONUP : Common::EVENT_RBUTTONDOWN );
++					event.mouse.x = _mouseCurState.x;
++					event.mouse.y = _mouseCurState.y;
++					return true;
++				// now map F7 (=zoom+) to menu (=F4) so we can have same mapping for N810 and 770/800 for menu key
++				// N800's real menu key is hidden on retractable keyboard so we use zoom+ for it instead too				 
++				case SDLK_F7:
++					ev.key.keysym.sym=SDLK_F4;
++					break;
++				/* with real keyboard we can afford to lose F7, do not remap F4 back
++				case SDLK_F4:
++					ev.key.keysym.sym=SDLK_F7;
++					break; */
++				default:
++					;			
++			}
++			break;
++	}
++#endif //SDL_MAEMO
++
+ #ifdef LINUPY
+ 	// On Yopy map the End button to quit
+ 	if ((ev.key.keysym.sym == 293)) {
+diff -ru scummvm-1.2.0-orig/backends/platform/sdl/graphics.cpp scummvm-1.2.0-maemo/backends/platform/sdl/graphics.cpp
+--- scummvm-1.2.0-orig/backends/platform/sdl/graphics.cpp	2010-09-06 21:28:17.000000000 +0400
++++ scummvm-1.2.0-maemo/backends/platform/sdl/graphics.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -535,6 +535,56 @@
+ 	height = bestMode->h;
+ }
+ 
++#ifdef  MAEMO_SDL
++#include "SDL_syswm.h"
++
++static void maemo5_WM_init(int fullscreen){
++//static int fsdone=0;
++//static int wmdone=0;
++SDL_SysWMinfo info;                                                                                                                                  
++SDL_VERSION(&info.version);                                                                                                                          
++if ( SDL_GetWMInfo(&info) ) {                                                                                                                        
++        Display *dpy = info.info.x11.display;                                                                                                        
++        Window win;                                                                                                                                  
++        unsigned long val = 1;
++        Atom atom_zoom = XInternAtom(dpy, "_HILDON_ZOOM_KEY_ATOM", 0);
++        info.info.x11.lock_func();
++        win = info.info.x11.fswindow;                                                                                                                
++        if (win)
++                XChangeProperty (dpy,win,atom_zoom,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1); // grab zoom keys
++        win = info.info.x11.wmwindow;                                                                                                                
++        if (win)
++                XChangeProperty (dpy,win,atom_zoom,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1); // grab zoom keys
++#if 0
++        if (win && fullscreen /* && !fsdone */ ) {
++                XUnmapWindow(dpy,win);
++                XChangeProperty (dpy,win,atom_zoom,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1); // grab zoom keys
++                Atom atom_noncomposited = XInternAtom(dpy, "_HILDON_NON_COMPOSITED_WINDOW", 0);
++                Atom atom_wmstate = XInternAtom(dpy, "_NET_WM_STATE", 0);
++                Atom atom_wmstate_fullscreen = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", 0);
++                XSetWindowAttributes xattr;
++                xattr.override_redirect = False;
++                XChangeProperty (dpy,win,atom_noncomposited,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1); // make window not composited
++                //XChangeWindowAttributes(dpy, win, CWOverrideRedirect, &xattr); // 
++                XChangeProperty (dpy,win,atom_wmstate,XA_ATOM,32,PropModeReplace,(unsigned char *) &atom_wmstate_fullscreen,1); // mark as fullscreen = disable tskswitch button
++                XMapWindow(dpy,win);
++                //fsdone=1;
++        }
++        win = info.info.x11.wmwindow;
++        if (win && !fullscreen /* && !wmdone */) {
++                XUnmapWindow(dpy,win);
++                XChangeProperty (dpy,win,atom_zoom,XA_INTEGER,32,PropModeReplace,(unsigned char *) &val,1);
++                XMapWindow(dpy,win);
++                //wmdone=1;
++        }
++#endif
++        info.info.x11.unlock_func();
++//      XSync(dpy,False);
++}                                                                                                                                                    
++}
++#endif
++
++
+ bool OSystem_SDL::loadGFXMode() {
+ 	assert(_inited);
+ 	_forceFull = true;
+@@ -575,6 +625,9 @@
+ 		error("allocating _screen failed");
+ #endif
+ 
++#ifdef  MAEMO_SDL                                                                                                                                            
++        maemo5_WM_init(_videoMode.fullscreen);                                                                                                               
++#endif                                                                                                                                                       
+ 	//
+ 	// Create the surface that contains the scaled graphics in 16 bit mode
+ 	//
+@@ -959,6 +1012,14 @@
+ 		_videoMode.fullscreen = enable;
+ 		_transactionDetails.needHotswap = true;
+ 	}
++#ifdef MAEMO_SDL
++	char *caption;
++	char title[50];
++	title[49] = '\0';
++	SDL_WM_GetCaption(&caption, NULL);
++	if (caption!=NULL) {strncpy(title,caption,49);
++	setXWindowName(caption); }
++#endif
+ }
+ 
+ void OSystem_SDL::setAspectRatioCorrection(bool enable) {
+diff -ru scummvm-1.2.0-orig/backends/platform/sdl/sdl.cpp scummvm-1.2.0-maemo/backends/platform/sdl/sdl.cpp
+--- scummvm-1.2.0-orig/backends/platform/sdl/sdl.cpp	2010-08-19 16:43:37.000000000 +0400
++++ scummvm-1.2.0-maemo/backends/platform/sdl/sdl.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -48,6 +48,10 @@
+ #include "icons/scummvm.xpm"
+ 
+ #include <time.h>	// for getTimeAndDate()
++#ifdef        MAEMO_SDL
++#include <SDL/SDL_syswm.h>
++#include <X11/Xutil.h>
++#endif
+ 
+ //#define SAMPLES_PER_SEC 11025
+ #define SAMPLES_PER_SEC 22050
+@@ -214,7 +218,15 @@
+ 		_timerID = SDL_AddTimer(10, &timer_handler, _timer);
+ 	}
+ 
+-	// Invoke parent implementation of this method
++#ifdef        MAEMO_SDL
++	// some keymappings are done differently for devices with full keyboard (N810=RX-34)
++	_have_keyboard=0;
++	char *device=getenv("SCUMMVM_MAEMO_DEVICE");
++	if (device != NULL)
++	if ( (strcmp(device,"RX-44") == 0) || (strcmp(device,"RX-48") == 0) || (strcmp(device,"RX-51") == 0))
++	    _have_keyboard=1;
++#endif
++ 	// Invoke parent implementation of this method
+ 	OSystem::initBackend();
+ 
+ 	_inited = true;
+@@ -427,6 +439,23 @@
+ 	return file.createWriteStream();
+ }
+ 
++#ifdef MAEMO_SDL
++void OSystem_SDL::setXWindowName(const char *caption) {
++	SDL_SysWMinfo info;
++	SDL_VERSION(&info.version);
++	if ( SDL_GetWMInfo(&info) ) {
++		Display *dpy = info.info.x11.display;
++		Window win;
++		//if (_videoMode.fullscreen)
++		win = info.info.x11.fswindow;
++		if (win) XStoreName(dpy, win, caption);
++		//else
++		win = info.info.x11.wmwindow;
++		if (win) XStoreName(dpy, win, caption);
++	}
++}
++#endif	
++
+ void OSystem_SDL::setWindowCaption(const char *caption) {
+ 	Common::String cap;
+ 	byte c;
+@@ -443,6 +472,11 @@
+ 	}
+ 
+ 	SDL_WM_SetCaption(cap.c_str(), cap.c_str());
++#ifdef MAEMO_SDL
++	Common::String cap2("ScummVM - "); // 2 lines in OS2008 task switcher, set first line
++	cap=cap2+cap;
++	setXWindowName(cap.c_str());
++#endif	
+ }
+ 
+ bool OSystem_SDL::hasFeature(Feature f) {
+@@ -519,6 +553,14 @@
+ #endif
+ }
+ 
++#ifdef MAEMO_SDL
++// no Maemo version needs setupIcon
++// also N900 is hit by SDL_WM_SetIcon bug (window cannot receive input)
++// http://bugzilla.libsdl.org/show_bug.cgi?id=586
++void OSystem_SDL::setupIcon() {
++    ;
++}
++#else
+ void OSystem_SDL::setupIcon() {
+ 	int x, y, w, h, ncols, nbytes, i;
+ 	unsigned int rgba[256];
+@@ -570,6 +612,7 @@
+ 	SDL_FreeSurface(sdl_surf);
+ 	free(icon);
+ }
++#endif
+ 
+ OSystem::MutexRef OSystem_SDL::createMutex() {
+ 	return (MutexRef) SDL_CreateMutex();
+diff -ru scummvm-1.2.0-orig/backends/platform/sdl/sdl.h scummvm-1.2.0-maemo/backends/platform/sdl/sdl.h
+--- scummvm-1.2.0-orig/backends/platform/sdl/sdl.h	2010-07-13 03:18:44.000000000 +0400
++++ scummvm-1.2.0-maemo/backends/platform/sdl/sdl.h	2010-10-12 23:23:27.000000000 +0400
+@@ -232,6 +232,9 @@
+ 	virtual int getGraphicsMode() const;
+ 
+ 	virtual void setWindowCaption(const char *caption);
++#ifdef	MAEMO_SDL
++	void setXWindowName(const char *caption);
++#endif
+ 	virtual bool openCD(int drive);
+ 
+ 	virtual bool hasFeature(Feature f);
+@@ -416,6 +419,9 @@
+ 	// joystick
+ 	SDL_Joystick *_joystick;
+ 
++#ifdef	MAEMO_SDL
++	int _have_keyboard;
++#endif
+ 	// Shake mode
+ 	int _currentShakePos;
+ 	int _newShakePos;
+diff -ru scummvm-1.2.0-orig/configure scummvm-1.2.0-maemo/configure
+--- scummvm-1.2.0-orig/configure	2010-10-07 19:48:52.000000000 +0400
++++ scummvm-1.2.0-maemo/configure	2010-10-18 02:10:41.000000000 +0400
+@@ -180,7 +180,7 @@
+ datarootdir='${prefix}/share'
+ datadir='${datarootdir}/scummvm'
+ docdir='${datarootdir}/doc/scummvm'
+-libdir='${exec_prefix}/lib'
++libdir='${exec_prefix}/lib/scummvm'
+ #localedir='${datarootdir}/locale'
+ mandir='${datarootdir}/man'
+ 
+@@ -2571,7 +2571,7 @@
+ 		DEFINES="$DEFINES -DPLUGIN_DIRECTORY=\\\"../plugins\\\""
+ 		;;
+ 	*)
+-		DEFINES="$DEFINES -DPLUGIN_DIRECTORY=\\\"$libdir/scummvm\\\""
++		DEFINES="$DEFINES -DPLUGIN_DIRECTORY=\\\"$libdir\\\""
+ 		;;
+ esac
+ 
+@@ -2742,7 +2742,7 @@
+ 	sdl)
+ 		find_sdlconfig
+ 		INCLUDES="$INCLUDES `$_sdlconfig --prefix="$_sdlpath" --cflags`"
+-		LIBS="$LIBS `$_sdlconfig --prefix="$_sdlpath" --libs`"
++		LIBS="$LIBS `$_sdlconfig --prefix="$_sdlpath" --libs` -lX11"
+ 		DEFINES="$DEFINES -DSDL_BACKEND"
+ 		;;
+ 	wii)
+Только в scummvm-1.2.0-maemo: debian
+diff -ru scummvm-1.2.0-orig/engines/cine/main_loop.cpp scummvm-1.2.0-maemo/engines/cine/main_loop.cpp
+--- scummvm-1.2.0-orig/engines/cine/main_loop.cpp	2010-08-09 15:38:01.000000000 +0400
++++ scummvm-1.2.0-maemo/engines/cine/main_loop.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -75,18 +75,27 @@
+ 				mouseRight = 1;
+ 			}
+ 			break;
++#ifdef	MAEMO_SDL
++		case Common::KEYCODE_UP:
++#else
+ 		case Common::KEYCODE_F1:
++#endif
+ 			if (allowPlayerInput) {
+ 				playerCommand = 0; // EXAMINE
+ 				makeCommandLine();
+ 			}
+ 			break;
++#ifdef	MAEMO_SDL
++		case Common::KEYCODE_DOWN:
++#else
+ 		case Common::KEYCODE_F2:
++#endif
+ 			if (allowPlayerInput) {
+ 				playerCommand = 1; // TAKE
+ 				makeCommandLine();
+ 			}
+ 			break;
++#ifndef	MAEMO_SDL
+ 		case Common::KEYCODE_F3:
+ 			if (allowPlayerInput) {
+ 				playerCommand = 2; // INVENTORY
+@@ -99,13 +108,43 @@
+ 				makeCommandLine();
+ 			}
+ 			break;
++#else
++//map f3, f4 to f8,f7 = zoom +- keys, when in menu generate keypresses for savegame
++		case Common::KEYCODE_F8:
++			if (inMenu)
++				lastKeyStroke = '1';
++			else if (allowPlayerInput) {
++				playerCommand = 2; // INVENTORY
++				makeCommandLine();
++			}
++			break;
++		case Common::KEYCODE_F7:
++			if (inMenu)
++				lastKeyStroke = '2';
++			else 
++			if (allowPlayerInput) {
++				playerCommand = 3; // USE
++				makeCommandLine();
++			}
++			break;
++#endif
++#ifdef	MAEMO_SDL
++		case Common::KEYCODE_LEFT:
++//			if (event.kbd.flags&Common::KBD_SHIFT)
++//				moveUsingKeyboard(-1, 0); // Left
++#else
+ 		case Common::KEYCODE_F5:
++#endif
+ 			if (allowPlayerInput) {
+ 				playerCommand = 4; // ACTIVATE
+ 				makeCommandLine();
+ 			}
+ 			break;
++#ifdef	MAEMO_SDL
++		case Common::KEYCODE_RIGHT:
++#else
+ 		case Common::KEYCODE_F6:
++#endif
+ 			if (allowPlayerInput) {
+ 				playerCommand = 5; // SPEAK
+ 				makeCommandLine();
+@@ -117,7 +156,11 @@
+ 				makeCommandLine();
+ 			}
+ 			break;
++#ifdef	MAEMO_SDL
++		case Common::KEYCODE_F4: // Menu key
++#else
+ 		case Common::KEYCODE_F10:
++#endif
+ 			if (!disableSystemMenu && !inMenu) {
+ 				g_cine->makeSystemMenu();
+ 			}
+@@ -133,19 +176,19 @@
+ 		case Common::KEYCODE_KP_PLUS:
+ 			g_cine->modifyGameSpeed(+1); // Faster
+ 			break;
+-		case Common::KEYCODE_LEFT:
++//		case Common::KEYCODE_LEFT:
+ 		case Common::KEYCODE_KP4:
+ 			moveUsingKeyboard(-1, 0); // Left
+ 			break;
+-		case Common::KEYCODE_RIGHT:
++//		case Common::KEYCODE_RIGHT:
+ 		case Common::KEYCODE_KP6:
+ 			moveUsingKeyboard(+1, 0); // Right
+ 			break;
+-		case Common::KEYCODE_UP:
++//		case Common::KEYCODE_UP:
+ 		case Common::KEYCODE_KP8:
+ 			moveUsingKeyboard(0, +1); // Up
+ 			break;
+-		case Common::KEYCODE_DOWN:
++//		case Common::KEYCODE_DOWN:
+ 		case Common::KEYCODE_KP2:
+ 			moveUsingKeyboard(0, -1); // Down
+ 			break;
+diff -ru scummvm-1.2.0-orig/engines/gob/util.cpp scummvm-1.2.0-maemo/engines/gob/util.cpp
+--- scummvm-1.2.0-orig/engines/gob/util.cpp	2010-08-16 03:37:56.000000000 +0400
++++ scummvm-1.2.0-maemo/engines/gob/util.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -114,6 +114,10 @@
+ 			_mouseButtons = (MouseButtons) (((uint32) _mouseButtons) & ~((uint32) kMouseButtonsRight));
+ 			break;
+ 		case Common::EVENT_KEYDOWN:
++#ifdef MAEMO_SDL
++			if (event.kbd.keycode==Common::KEYCODE_F4)
++				_mouseButtons = (MouseButtons) (((uint32) _mouseButtons) | ((uint32) kMouseButtonsRight));
++#endif
+ 			if (event.kbd.hasFlags(Common::KBD_CTRL)) {
+ 				if (event.kbd.keycode == Common::KEYCODE_f)
+ 					_fastMode ^= 1;
+@@ -126,6 +130,10 @@
+ 			addKeyToBuffer(event.kbd);
+ 			break;
+ 		case Common::EVENT_KEYUP:
++#ifdef MAEMO_SDL
++			if (event.kbd.keycode==Common::KEYCODE_F4)
++				_mouseButtons = (MouseButtons) (((uint32) _mouseButtons) & ~((uint32) kMouseButtonsRight));
++#endif
+ 			break;
+ 		default:
+ 			break;
+diff -ru scummvm-1.2.0-orig/engines/kyra/module.mk scummvm-1.2.0-maemo/engines/kyra/module.mk
+--- scummvm-1.2.0-orig/engines/kyra/module.mk	2010-07-23 02:00:46.000000000 +0400
++++ scummvm-1.2.0-maemo/engines/kyra/module.mk	2010-10-12 23:23:27.000000000 +0400
+@@ -96,3 +96,9 @@
+ 
+ # Include common rules
+ include $(srcdir)/rules.mk
++
++#ugly workaround, screen.cpp crashes gcc version 3.4.4 (CodeSourcery ARM 2005q3-2) with anything but -O3
++$(MODULE)/screen.o: $(MODULE)/screen.cpp
++	$(MKDIR) $(*D)/$(DEPDIR)
++	$(CXX) -Wp,-MMD,"$(*D)/$(DEPDIR)/$(*F).d",-MQ,"$@",-MP $(CXXFLAGS) -O3 $(CPPFLAGS) -c $(<) -o $*.o
++
+diff -ru scummvm-1.2.0-orig/engines/lure/menu.cpp scummvm-1.2.0-maemo/engines/lure/menu.cpp
+--- scummvm-1.2.0-orig/engines/lure/menu.cpp	2010-03-28 01:00:16.000000000 +0300
++++ scummvm-1.2.0-maemo/engines/lure/menu.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -34,7 +34,7 @@
+ #include "lure/events.h"
+ #include "lure/lure.h"
+ 
+-#if defined(_WIN32_WCE) || defined(__SYMBIAN32__)
++#if defined(_WIN32_WCE) || defined(MAEMO_SDL) || defined(__SYMBIAN32__)
+ #define LURE_CLICKABLE_MENUS
+ #endif
+ 
+diff -ru scummvm-1.2.0-orig/engines/queen/input.cpp scummvm-1.2.0-maemo/engines/queen/input.cpp
+--- scummvm-1.2.0-orig/engines/queen/input.cpp	2010-04-13 01:21:06.000000000 +0400
++++ scummvm-1.2.0-maemo/engines/queen/input.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -176,7 +176,11 @@
+ 		}
+ 		break;
+ 	case Common::KEYCODE_F1: // use Journal
++#ifdef MAEMO_SDL
++	case Common::KEYCODE_F4: // menu key on N770
++#else
+ 	case Common::KEYCODE_F5:
++#endif
+ 		if (_cutawayRunning) {
+ 			if (_canQuit) {
+ 				_keyVerb = VERB_USE_JOURNAL;
+diff -ru scummvm-1.2.0-orig/engines/scumm/dialogs.cpp scummvm-1.2.0-maemo/engines/scumm/dialogs.cpp
+--- scummvm-1.2.0-orig/engines/scumm/dialogs.cpp	2010-09-14 03:35:55.000000000 +0400
++++ scummvm-1.2.0-maemo/engines/scumm/dialogs.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -466,7 +466,11 @@
+ }
+ 
+ void PauseDialog::handleKeyDown(Common::KeyState state) {
++#ifdef MAEMO_SDL
++	if (state.ascii == ' ' || state.keycode == Common::KEYCODE_UP )  // Close pause dialog if space or UP key is pressed
++#else
+ 	if (state.ascii == ' ')  // Close pause dialog if space key is pressed
++#endif
+ 		close();
+ 	else
+ 		ScummDialog::handleKeyDown(state);
+@@ -539,12 +543,19 @@
+ }
+ 
+ void ValueDisplayDialog::handleKeyDown(Common::KeyState state) {
++#ifdef MAEMO_SDL
++        if (state.ascii == _incKey || state.ascii == _decKey || state.keycode == 275 || state.keycode == 276) {
++                if ((state.ascii == _incKey || state.keycode == 275 ) && _value < _max)
++                        _value++;
++                else if ((state.ascii == _decKey || state.keycode == 276) && _value > _min)
++                        _value--;
++#else
+ 	if (state.ascii == _incKey || state.ascii == _decKey) {
+ 		if (state.ascii == _incKey && _value < _max)
+ 			_value++;
+ 		else if (state.ascii == _decKey && _value > _min)
+ 			_value--;
+-
++#endif
+ 		setResult(_value);
+ 		_timer = g_system->getMillis() + kDisplayDelay;
+ 		draw();
+diff -ru scummvm-1.2.0-orig/engines/scumm/input.cpp scummvm-1.2.0-maemo/engines/scumm/input.cpp
+--- scummvm-1.2.0-orig/engines/scumm/input.cpp	2010-05-26 23:54:50.000000000 +0400
++++ scummvm-1.2.0-maemo/engines/scumm/input.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -135,7 +135,20 @@
+ 			// Normal key press, pass on to the game.
+ 			_keyPressed = event.kbd;
+ 		}
+-
++#ifdef MAEMO_SDL
++               switch (_keyPressed.keycode) {
++                       case Common::KEYCODE_F8: _fastMode ^= 1; break ;// Map F8 (zoom out) to toggle fast mode                                                                                             
++                       case Common::KEYCODE_F4: _keyPressed.keycode = Common::KEYCODE_F5; _keyPressed.ascii=Common::ASCII_F5 ; break; // map F4 to F5 (menu key)
++                       case Common::KEYCODE_RETURN: _keyPressed.keycode = Common::KEYCODE_TAB; _keyPressed.ascii=Common::ASCII_TAB ; break; // map Select (return) to Tab (right mouse button)
++                       default: ;
++               }
++               if (_game.version < 7) switch(event.kbd.keycode){
++                       case Common::KEYCODE_UP: _keyPressed.ascii = ' '; _keyPressed.keycode=Common::KEYCODE_SPACE; break ;// map Up to space (pause game)
++                       case Common::KEYCODE_DOWN: _keyPressed.ascii ='.'; _keyPressed.keycode=Common::KEYCODE_PERIOD; break ;// map Down to . (skip one line of dialog)
++                       default: ;
++               }
++#endif
++ 
+ 		// FIXME: We are using ASCII values to index the _keyDownMap here,
+ 		// yet later one code which checks _keyDownMap will use KEYCODEs
+ 		// to do so. That is, we are mixing ascii and keycode values here,
+@@ -151,6 +164,20 @@
+ 		break;
+ 
+ 	case Common::EVENT_KEYUP:
++#ifdef MAEMO_SDL
++                       // map keyup with similar rules as keydown
++                       switch (event.kbd.keycode) {
++
++                               case Common::KEYCODE_F4: event.kbd.keycode = Common::KEYCODE_F5; event.kbd.ascii=Common::ASCII_F5 ; break; // map F4 to F5 (menu key)
++                               case Common::KEYCODE_RETURN: event.kbd.keycode = Common::KEYCODE_TAB; event.kbd.ascii=Common::ASCII_TAB ; break; // map Select (return) to Tab (right mouse button)
++                               default: ;
++                       }
++                       if (_game.version < 7) switch(event.kbd.keycode){
++                               case Common::KEYCODE_UP: event.kbd.ascii = ' '; event.kbd.keycode=Common::KEYCODE_SPACE; break ;// map Up to space (pause game)
++                               case Common::KEYCODE_DOWN: event.kbd.ascii ='.'; event.kbd.keycode=Common::KEYCODE_PERIOD; break ;// map Down to . (skip one line of dialog)
++                               default: ;
++                       }
++#endif
+ 		if (event.kbd.ascii >= 512) {
+ 			debugC(DEBUG_GENERAL, "keyPressed > 512 (%d)", event.kbd.ascii);
+ 		} else {
+@@ -513,9 +540,10 @@
+ 		if (VAR_SAVELOAD_SCRIPT != 0xFF && _currentRoom != 0)
+ 			runScript(VAR(VAR_SAVELOAD_SCRIPT2), 0, 0, 0);
+ 
++#ifndef MAEMO_SDL
+ 	} else if (restartKeyEnabled && (lastKeyHit.keycode == Common::KEYCODE_F8 && lastKeyHit.hasFlags(0))) {
+ 		confirmRestartDialog();
+-
++#endif
+ 	} else if (pauseKeyEnabled && (lastKeyHit.keycode == Common::KEYCODE_SPACE && lastKeyHit.hasFlags(0))) {
+ 		pauseGame();
+ 
+diff -ru scummvm-1.2.0-orig/engines/sky/sky.cpp scummvm-1.2.0-maemo/engines/sky/sky.cpp
+--- scummvm-1.2.0-orig/engines/sky/sky.cpp	2010-07-17 22:38:42.000000000 +0400
++++ scummvm-1.2.0-maemo/engines/sky/sky.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -408,6 +408,17 @@
+ 			switch (event.type) {
+ 			case Common::EVENT_KEYDOWN:
+ 				_keyPressed = event.kbd;
++#ifdef	MAEMO_SDL
++				// Maemo platform keybindings
++				if (_keyPressed.keycode == Common::KEYCODE_F4) // Map F4 (menu) to F5 (access main menu)
++					_keyPressed.keycode = Common::KEYCODE_F5;
++				if (_keyPressed.ascii == 13) // Map Select=Enter to right mouse button
++					_skyMouse->buttonPressed(1);
++				if (_keyPressed.keycode == Common::KEYCODE_F8) // Map F8 (zoom out) to toggle fast mode
++					_fastMode ^= 1;
++				if (_keyPressed.keycode == Common::KEYCODE_DOWN) // Map Down to . (skip one line of dialog)
++					_keyPressed.ascii = '.';
++#endif
+ 				break;
+ 			case Common::EVENT_MOUSEMOVE:
+ 				if (!(_systemVars.systemFlags & SF_MOUSE_LOCKED))
+diff -ru scummvm-1.2.0-orig/engines/sword1/sword1.cpp scummvm-1.2.0-maemo/engines/sword1/sword1.cpp
+--- scummvm-1.2.0-orig/engines/sword1/sword1.cpp	2010-09-21 00:38:34.000000000 +0400
++++ scummvm-1.2.0-maemo/engines/sword1/sword1.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -708,8 +708,21 @@
+ 		while (_eventMan->pollEvent(event)) {
+ 			switch (event.type) {
+ 			case Common::EVENT_KEYDOWN:
++#ifdef MAEMO_SDL
++// map center to right button
++				if (event.kbd.keycode == 13) {
++					_mouseState |= BS1R_BUTTON_DOWN;
++				} else
++#endif
+ 				_keyPressed = event.kbd;
+ 				break;
++#ifdef MAEMO_SDL
++			case Common::EVENT_KEYUP:
++				if (event.kbd.keycode == 13) {
++					_mouseState |= BS1R_BUTTON_UP;
++				}
++				break;
++#endif
+ 			case Common::EVENT_MOUSEMOVE:
+ 				_mouseCoord = event.mouse;
+ 				break;
+diff -ru scummvm-1.2.0-orig/engines/sword2/sword2.cpp scummvm-1.2.0-maemo/engines/sword2/sword2.cpp
+--- scummvm-1.2.0-orig/engines/sword2/sword2.cpp	2010-09-21 00:32:50.000000000 +0400
++++ scummvm-1.2.0-maemo/engines/sword2/sword2.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -682,11 +682,27 @@
+ 						_gameSpeed = 1;
+ 				}
+ 			}
++#ifdef MAEMO_SDL
++// map center to right button
++			else if (event.kbd.keycode == 13 && !(_inputEventFilter & RD_RIGHTBUTTONDOWN)) {
++				_mouseEvent.pending = true;
++				_mouseEvent.buttons = RD_RIGHTBUTTONDOWN;
++			} else
++#endif
+ 			if (!(_inputEventFilter & RD_KEYDOWN)) {
+ 				_keyboardEvent.pending = true;
+ 				_keyboardEvent.kbd = event.kbd;
+ 			}
+ 			break;
++#ifdef MAEMO_SDL
++		case Common::EVENT_KEYUP:
++// map center to right button
++			if (event.kbd.keycode == 13 && !(_inputEventFilter & RD_RIGHTBUTTONUP)) {
++				_mouseEvent.pending = true;
++				_mouseEvent.buttons = RD_RIGHTBUTTONUP;
++			}
++			break;
++#endif
+ 		case Common::EVENT_LBUTTONDOWN:
+ 			if (!(_inputEventFilter & RD_LEFTBUTTONDOWN)) {
+ 				_mouseEvent.pending = true;
+diff -ru scummvm-1.2.0-orig/engines/touche/touche.cpp scummvm-1.2.0-maemo/engines/touche/touche.cpp
+--- scummvm-1.2.0-orig/engines/touche/touche.cpp	2010-06-17 17:42:02.000000000 +0400
++++ scummvm-1.2.0-maemo/engines/touche/touche.cpp	2010-10-12 23:23:27.000000000 +0400
+@@ -302,6 +302,13 @@
+ 	while (_eventMan->pollEvent(event)) {
+ 		switch (event.type) {
+ 		case Common::EVENT_KEYDOWN:
++#ifdef	MAEMO_SDL
++			if (event.kbd.keycode == 13) { // select button simulates righ button toggle
++				_inp_rightMouseButtonPressed=!_inp_rightMouseButtonPressed;
++			} else {
++				_inp_rightMouseButtonPressed = false;
++			}
++#endif
+ 			if (!handleKeyEvents) {
+ 				break;
+ 			}
+@@ -312,10 +319,18 @@
+ 						quitGame();
+ 					}
+ 				}
++#ifdef	MAEMO_SDL
++			} else if (event.kbd.keycode == Common::KEYCODE_F4) {
++#else
+ 			} else if (event.kbd.keycode == Common::KEYCODE_F5) {
++#endif
+ 				if (_flagsTable[618] == 0 && !_hideInventoryTexts) {
+ 					handleOptions(0);
+ 				}
++#ifdef	MAEMO_SDL
++			} else if (event.kbd.keycode == Common::KEYCODE_F8) {
++				_fastWalkMode = !_fastWalkMode;
++#endif
+ 			} else if (event.kbd.keycode == Common::KEYCODE_F9) {
+ 				_fastWalkMode = true;
+ 			} else if (event.kbd.keycode == Common::KEYCODE_F10) {
+@@ -340,12 +355,22 @@
+ 		case Common::EVENT_LBUTTONDOWN:
+ 			_inp_leftMouseButtonPressed = true;
+ 			break;
++#ifdef	MAEMO_SDL
++		case Common::EVENT_LBUTTONUP:
++			// this is done elsewhere _inp_leftMouseButtonPressed = false;
++			_inp_rightMouseButtonPressed = false; // simulate rbutton up to close menu
++			break;
++		case Common::EVENT_RBUTTONDOWN:
++			_inp_rightMouseButtonPressed = !_inp_rightMouseButtonPressed;
++			break;
++#else
+ 		case Common::EVENT_RBUTTONDOWN:
+ 			_inp_rightMouseButtonPressed = true;
+ 			break;
+ 		case Common::EVENT_RBUTTONUP:
+ 			_inp_rightMouseButtonPressed = false;
+ 			break;
++#endif
+ 		default:
+ 			break;
+ 		}

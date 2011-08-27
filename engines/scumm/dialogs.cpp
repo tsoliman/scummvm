@@ -463,7 +463,11 @@ PauseDialog::PauseDialog(ScummEngine *scumm, int res)
 }
 
 void PauseDialog::handleKeyDown(Common::KeyState state) {
+#ifdef MAEMO_SDL
+	if (state.ascii == ' ' || state.keycode == Common::KEYCODE_UP )  // Close pause dialog if space or UP key is pressed
+#else
 	if (state.ascii == ' ')  // Close pause dialog if space key is pressed
+#endif
 		close();
 	else
 		ScummDialog::handleKeyDown(state);
@@ -536,12 +540,19 @@ void ValueDisplayDialog::reflowLayout() {
 }
 
 void ValueDisplayDialog::handleKeyDown(Common::KeyState state) {
+#ifdef MAEMO_SDL
+        if (state.ascii == _incKey || state.ascii == _decKey || state.keycode == 275 || state.keycode == 276) {
+                if ((state.ascii == _incKey || state.keycode == 275 ) && _value < _max)
+                        _value++;
+                else if ((state.ascii == _decKey || state.keycode == 276) && _value > _min)
+                        _value--;
+#else
 	if (state.ascii == _incKey || state.ascii == _decKey) {
 		if (state.ascii == _incKey && _value < _max)
 			_value++;
 		else if (state.ascii == _decKey && _value > _min)
 			_value--;
-
+#endif
 		setResult(_value);
 		_timer = g_system->getMillis() + kDisplayDelay;
 		draw();
