@@ -87,9 +87,7 @@ public:
 class MT32File : public MT32Emu::File {
 	Common::File _in;
 public:
-	bool open(const char *filename, OpenMode mode) {
-		assert(mode == OpenMode_read);
-
+	bool open(const char *filename) {
 		return _in.open(filename);
 	}
 
@@ -112,6 +110,24 @@ public:
 
 	bool isEOF() {
 		return _in.isOpen() && _in.eos();
+	}
+
+	size_t getSize() {
+		assert(_in.isOpen());
+		return _in.size();
+	}
+
+	unsigned char* getData() {
+		if (!_in.isOpen())
+			return 0;
+
+		size_t size = getSize();
+		if (!size)
+			return 0;
+
+		data = new unsigned char[size];
+		read(data, size);
+		return data;
 	}
 };
 
@@ -201,9 +217,9 @@ static void drawMessage(int offset, const Common::String &text) {
 	g_system->updateScreen();
 }
 
-static MT32Emu::File *MT32_OpenFile(void *userData, const char *filename, MT32Emu::File::OpenMode mode) {
+static MT32Emu::File *MT32_OpenFile(void *userData, const char *filename) {
 	MT32File *file = new MT32File();
-	if (!file->open(filename, mode)) {
+	if (!file->open(filename)) {
 		delete file;
 		return NULL;
 	}
