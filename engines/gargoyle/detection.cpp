@@ -159,7 +159,7 @@ public:
 	GargoyleMetaEngine() : AdvancedMetaEngine(NULL, 0, gargoyleGames) {
 		_md5Bytes = 5000;
 		_singleid = "gargoyle";
-		_guioptions = Common::GUIO_NOSPEECH;
+		_guioptions = GUIO1(GUIO_NOSPEECH);;
 	}
 
 	virtual const char *getName() const {
