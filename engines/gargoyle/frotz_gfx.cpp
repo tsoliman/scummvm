@@ -388,9 +388,9 @@ void FrotzPictures::drawPicture(int picNumber, Graphics::Surface &s, int x, int 
 	if (!bmcontents || !bmmask)
 		error("Could not allocate bitmap memory");
 
-	Common::set_to(bmcontents, bmcontents + scanwidth * height + scanwidth, 0);
-	Common::set_to(bmmask, bmmask + scanwidth * height + scanwidth, 0);
-	Common::set_to(&palette[0], &palette[256], 0);
+	Common::fill(bmcontents, bmcontents + scanwidth * height + scanwidth, 0);
+	Common::fill(bmmask, bmmask + scanwidth * height + scanwidth, 0);
+	Common::fill(&palette[0], &palette[256], 0);
 
 	bmoffset = bmcontents;
 

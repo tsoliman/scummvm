@@ -51,7 +51,7 @@ RGBList::RGBList(int numEntries, uint32 *srcData, bool freeData) {
 	}
 
 	_palIndexes = new byte[numEntries];
-	Common::set_to(&_palIndexes[0], &_palIndexes[numEntries], 0);
+	Common::fill(&_palIndexes[0], &_palIndexes[numEntries], 0);
 }
 
 RGBList::~RGBList() {

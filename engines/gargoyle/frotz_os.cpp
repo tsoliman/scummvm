@@ -48,7 +48,7 @@ ZHeaderData::ZHeaderData() {
 	h_globals = 0;
 	h_dynamic_size = 0;
 	h_flags = 0;
-	Common::set_to(&h_serial[0], &h_serial[6], 0);
+	Common::fill(&h_serial[0], &h_serial[6], 0);
 	h_abbreviations = 0;
 	h_file_size = 0;
 	h_checksum = 0;
@@ -70,7 +70,7 @@ ZHeaderData::ZHeaderData() {
 	h_standard_low = 1;
 	h_alphabet = 0;
 	h_extension_table = 0;
-	Common::set_to(&h_user_name[0], &h_user_name[8], 0);
+	Common::fill(&h_user_name[0], &h_user_name[8], 0);
 
 	hx_table_size = 0;
 	hx_mouse_x = 0;
@@ -320,7 +320,7 @@ void ZSystem::init_screen(void) {
 	}
 
 	// Get the defined user name
-	Common::set_to(&_h.h_user_name[0], &_h.h_user_name[8], 0);
+	Common::fill(&_h.h_user_name[0], &_h.h_user_name[8], 0);
 	strncpy((char *)&_h.h_user_name[0], _username.c_str(), 8);
 
 	_h.h_interpreter_version = 'F';

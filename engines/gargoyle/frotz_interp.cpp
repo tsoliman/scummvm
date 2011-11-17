@@ -303,7 +303,7 @@ void FrotzInterpreter::init_palette() {
 
 	// Clear the remainder of the palette
 	uint32 emptyPalette[240];
-	Common::set_to(&emptyPalette[0], &emptyPalette[240], 0);
+	Common::fill(&emptyPalette[0], &emptyPalette[240], 0);
 	g_system->getPaletteManager()->setPalette((const byte *)&emptyPalette[0], 16, 240);
 }
 
