@@ -116,6 +116,12 @@ struct Event {
 	Event() : type(EVENT_INVALID), synthetic(false) {}
 };
 
+struct ActionEvent : public Event {
+};
+
+struct HardwareEvent : public Event {
+};
+
 /**
  * A source of Events.
  *
