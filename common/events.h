@@ -128,9 +128,10 @@ struct HardwareEvent : public Event {
  * An example for this is OSystem, it provides events created by the system
  * and or user.
  */
-class EventSource {
+template<class E>
+class GenericEventSource {
 public:
-	virtual ~EventSource() {}
+	virtual ~GenericEventSource() {}
 
 	/**
 	 * Queries a event from the source.
@@ -138,7 +139,7 @@ public:
 	 * @param	event 	a reference to the event struct, where the event should be stored.
 	 * @return	true if an event was polled, false otherwise.
 	 */
-	virtual bool pollEvent(Event &event) = 0;
+	virtual bool pollEvent(E &event) = 0;
 
 	/**
 	 * Checks whether events from this source are allowed to be mapped.
@@ -150,6 +151,8 @@ public:
 	 */
 	virtual bool allowMapping() const { return true; }
 };
+
+typedef GenericEventSource<Event> EventSource;
 
 /**
  * An artificial event source. This is class is used as an event source, which is
