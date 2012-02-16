@@ -186,9 +186,10 @@ public:
  *
  * An example for this is the Engine object, it is catching events and processing them.
  */
-class EventObserver {
+template<class E>
+class GenericEventObserver {
 public:
-	virtual ~EventObserver() {}
+	virtual ~GenericEventObserver() {}
 
 	/**
 	 * Notifies the observer of an incoming event.
@@ -203,7 +204,7 @@ public:
 	 * @return  true if the event should not be passed to other observers,
 	 *          false otherwise.
 	 */
-	virtual bool notifyEvent(const Event &event) = 0;
+	virtual bool notifyEvent(const E &event) = 0;
 
 	/**
 	 * Notifies the observer of pollEvent() query.
@@ -213,6 +214,8 @@ public:
 	 */
 	virtual bool notifyPoll() { return false; }
 };
+
+typedef GenericEventObserver<Event> EventObserver;
 
 /**
  * A event mapper, which will map events to others.
