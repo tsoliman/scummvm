@@ -63,7 +63,6 @@ private:
 	bool notifyEvent(const Event &ev);
 	bool notifyPoll();
 	bool pollEvent(Event &ev);
-	bool allowMapping() const { return false; }
 
 	class RandomSourceRecord {
 	public:

@@ -176,7 +176,7 @@ Common::Keymap *OSystem_SDL_Maemo::getGlobalKeymap() {
 	Action *act;
 
 	act = new Action(globalMap, "CLKM", _("Click Mode"));
-	Event evt = Event();
+	ActionEvent evt = ActionEvent();
 	evt.type = EVENT_CUSTOM_BACKEND;
 	evt.customType = Maemo::kEventClickMode;
 	act->addEvent(evt);

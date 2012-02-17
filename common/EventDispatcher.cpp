@@ -28,7 +28,12 @@ EventDispatcher::EventDispatcher() : _mapper(0) {
 }
 
 EventDispatcher::~EventDispatcher() {
-	for (List<SourceEntry>::iterator i = _sources.begin(); i != _sources.end(); ++i) {
+	for (List<HardwareSourceEntry>::iterator i = _hardwareSources.begin(); i != _hardwareSources.end(); ++i) {
+		if (i->autoFree)
+			delete i->source;
+	}
+
+	for (List<ActionSourceEntry>::iterator i = _actionSources.begin(); i != _actionSources.end(); ++i) {
 		if (i->autoFree)
 			delete i->source;
 	}
@@ -43,31 +48,34 @@ EventDispatcher::~EventDispatcher() {
 }
 
 void EventDispatcher::dispatch() {
-	Event event;
+	HardwareEvent hardwareEvent;
+	ActionEvent actionEvent;
 
 	dispatchPoll();
 
-	for (List<SourceEntry>::iterator i = _sources.begin(); i != _sources.end(); ++i) {
-		const bool allowMapping = i->source->allowMapping();
+	//TODO: tsoliman: revisit this - all events have to go through the mapper
+	for (List<HardwareSourceEntry>::iterator i = _hardwareSources.begin(); i != _hardwareSources.end(); ++i) {
+		while (i->source->pollEvent(hardwareEvent)) {
+			assert (_mapper);
+			// mapper will always eat hardware events.
+			assert (_mapper->notifyEvent(hardwareEvent));
+			// We allow the event mapper to create multiple events, when
+			// eating an event.
+			while (_mapper->pollEvent(actionEvent))
+				dispatchEvent(actionEvent);
 
-		while (i->source->pollEvent(event)) {
-			// We only try to process the events via the setup event mapper, when
-			// we have a setup mapper and when the event source allows mapping.
-			if (_mapper && allowMapping) {
-				if (_mapper->notifyEvent(event)) {
-					// We allow the event mapper to create multiple events, when
-					// eating an event.
-					while (_mapper->pollEvent(event))
-						dispatchEvent(event);
-
-					// Try getting another event from the current EventSource.
-					continue;
-				}
-			}
-
-			dispatchEvent(event);
+			// Try getting another event from the current EventSource.
+			continue;
 		}
+		dispatchEvent(actionEvent);
 	}
+
+	// TODO: tsoliman: Let the action events pass through to the observers? Check with LordHoto
+	for (List<ActionSourceEntry>::iterator i = _actionSources.begin(); i != _actionSources.end(); ++i) {
+		while (i->source->pollEvent(actionEvent))
+			dispatchEvent(actionEvent);
+	}
+
 }
 
 void EventDispatcher::registerMapper(EventMapper *mapper) {
@@ -75,22 +83,43 @@ void EventDispatcher::registerMapper(EventMapper *mapper) {
 	_mapper = mapper;
 }
 
-void EventDispatcher::registerSource(EventSource *source, bool autoFree) {
-	SourceEntry newEntry;
+void EventDispatcher::registerSource(ActionEventSource *source, bool autoFree) {
+	ActionSourceEntry newEntry;
 
 	newEntry.source = source;
 	newEntry.autoFree = autoFree;
 
-	_sources.push_back(newEntry);
+	_actionSources.push_back(newEntry);
 }
 
-void EventDispatcher::unregisterSource(EventSource *source) {
-	for (List<SourceEntry>::iterator i = _sources.begin(); i != _sources.end(); ++i) {
+void EventDispatcher::registerSource(HardwareEventSource *source, bool autoFree) {
+	HardwareSourceEntry newEntry;
+
+	newEntry.source = source;
+	newEntry.autoFree = autoFree;
+
+	_hardwareSources.push_back(newEntry);
+}
+
+void EventDispatcher::unregisterSource(ActionEventSource *source) {
+	for (List<ActionSourceEntry>::iterator i = _actionSources.begin(); i != _actionSources.end(); ++i) {
 		if (i->source == source) {
 			if (i->autoFree)
 				delete source;
 
-			_sources.erase(i);
+			_actionSources.erase(i);
+			return;
+		}
+	}
+}
+
+void EventDispatcher::unregisterSource(HardwareEventSource *source) {
+	for (List<HardwareSourceEntry>::iterator i = _hardwareSources.begin(); i != _hardwareSources.end(); ++i) {
+		if (i->source == source) {
+			if (i->autoFree)
+				delete source;
+
+			_hardwareSources.erase(i);
 			return;
 		}
 	}

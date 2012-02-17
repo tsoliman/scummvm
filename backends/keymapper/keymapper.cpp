@@ -180,7 +180,7 @@ void Keymapper::popKeymap(const char *name) {
 
 }
 
-bool Keymapper::notifyEvent(const Common::Event &ev) {
+bool Keymapper::notifyEvent(const Common::HardwareEvent &ev) {
 	if (ev.type == Common::EVENT_KEYDOWN)
 		return mapKeyDown(ev.kbd);
 	else if (ev.type == Common::EVENT_KEYUP)
@@ -240,10 +240,10 @@ Action *Keymapper::getAction(const KeyState& key) {
 }
 
 void Keymapper::executeAction(const Action *action, bool keyDown) {
-	List<Event>::const_iterator it;
+	List<ActionEvent>::const_iterator it;
 
 	for (it = action->events.begin(); it != action->events.end(); ++it) {
-		Event evt = *it;
+		ActionEvent evt = *it;
 
 		switch (evt.type) {
 		case EVENT_KEYDOWN:

@@ -91,7 +91,7 @@ protected:
 	 */
 	SdlEventSource *_eventSource;
 
-	virtual Common::EventSource *getDefaultEventSource() { return _eventSource; }
+	virtual Common::HardwareEventSource *getDefaultEventSource() { return _eventSource; }
 
 	/**
 	 * Initialze the SDL library.

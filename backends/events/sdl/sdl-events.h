@@ -32,7 +32,7 @@
 /**
  * The SDL event source.
  */
-class SdlEventSource : public Common::EventSource {
+class SdlEventSource : public Common::HardwareEventSource {
 public:
 	SdlEventSource();
 	virtual ~SdlEventSource();
@@ -42,7 +42,7 @@ public:
 	/**
 	 * Gets and processes SDL events.
 	 */
-	virtual bool pollEvent(Common::Event &event);
+	virtual bool pollEvent(Common::HardwareEvent &event);
 
 	/**
 	 * Resets keyboard emulation after a video screen change

@@ -35,7 +35,7 @@
 #include "engines/engine.h"
 #include "gui/message.h"
 
-DefaultEventManager::DefaultEventManager(Common::EventSource *boss) :
+DefaultEventManager::DefaultEventManager(Common::HardwareEventSource *boss) :
 	_buttonState(0),
 	_modifierState(0),
 	_shouldQuit(false),
@@ -271,7 +271,7 @@ bool DefaultEventManager::pollEvent(Common::Event &event) {
 	return result;
 }
 
-void DefaultEventManager::pushEvent(const Common::Event &event) {
+void DefaultEventManager::pushEvent(const Common::ActionEvent &event) {
 	// If already received an EVENT_QUIT, don't add another one
 	if (event.type == Common::EVENT_QUIT) {
 		if (!_shouldQuit)

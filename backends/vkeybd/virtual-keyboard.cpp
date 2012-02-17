@@ -241,7 +241,7 @@ void VirtualKeyboard::show() {
 		assert(eventMan);
 
 		// push keydown & keyup events into the event manager
-		Event evt;
+		ActionEvent evt;
 		evt.synthetic = false;
 		while (!_keyQueue.empty()) {
 			evt.kbd = _keyQueue.pop();

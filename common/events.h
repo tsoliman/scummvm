@@ -140,19 +140,11 @@ public:
 	 * @return	true if an event was polled, false otherwise.
 	 */
 	virtual bool pollEvent(E &event) = 0;
-
-	/**
-	 * Checks whether events from this source are allowed to be mapped.
-	 *
-	 * Possible event sources not allowing mapping are: the event recorder/player and/or
-	 * the EventManager, which allows user events to be pushed.
-	 *
-	 * By default we allow mapping for every event source.
-	 */
-	virtual bool allowMapping() const { return true; }
 };
 
 typedef GenericEventSource<Event> EventSource;
+typedef GenericEventSource<ActionEvent> ActionEventSource;
+typedef GenericEventSource<HardwareEvent> HardwareEventSource;
 
 /**
  * An artificial event source. This is class is used as an event source, which is
@@ -160,15 +152,15 @@ typedef GenericEventSource<Event> EventSource;
  *
  * Example usage cases for this are the Keymapper or the DefaultEventManager.
  */
-class ArtificialEventSource : public EventSource {
+class ArtificialEventSource : public ActionEventSource {
 protected:
-	Queue<Event> _artificialEventQueue;
+	Queue<ActionEvent> _artificialEventQueue;
 public:
-	void addEvent(const Event &ev) {
+	void addEvent(const ActionEvent &ev) {
 		_artificialEventQueue.push(ev);
 	}
 
-	bool pollEvent(Event &ev) {
+	bool pollEvent(ActionEvent &ev) {
 	if (!_artificialEventQueue.empty()) {
 			ev = _artificialEventQueue.pop();
 			return true;
@@ -176,12 +168,6 @@ public:
 			return false;
 		}
 	}
-
-	/**
-	 * By default an artificial event source prevents its events
-	 * from being mapped.
-	 */
-	virtual bool allowMapping() const { return false; }
 };
 
 /**
@@ -219,16 +205,15 @@ public:
 };
 
 typedef GenericEventObserver<Event> EventObserver;
+typedef GenericEventObserver<ActionEvent> ActionEventObserver;
+typedef GenericEventObserver<HardwareEvent> HardwareEventObserver;
 
 /**
  * A event mapper, which will map events to others.
  *
  * An example for this is the Keymapper.
  */
-class EventMapper : public EventSource, public EventObserver {
-public:
-	/** For event mappers resulting events should never be mapped */
-	bool allowMapping() const { return false; }
+class EventMapper : public ActionEventSource, public HardwareEventObserver {
 };
 
 /**
@@ -278,14 +263,17 @@ public:
 	/**
 	 * Registers a new EventSource with the Dispatcher.
 	 */
-	void registerSource(EventSource *source, bool autoFree);
+	//TODO: tsoliman: Fix docs
+	void registerSource(HardwareEventSource *source, bool autoFree);
+	void registerSource(ActionEventSource *source, bool autoFree);
 
 	/**
 	 * Unregisters a EventSource.
 	 *
 	 * This takes the "autoFree" flag passed to registerSource into account.
 	 */
-	void unregisterSource(EventSource *source);
+	void unregisterSource(ActionEventSource *source);
+	void unregisterSource(HardwareEventSource *source);
 
 	/**
 	 * Registers a new EventObserver with the Dispatcher.
@@ -308,11 +296,16 @@ private:
 		bool autoFree;
 	};
 
-	struct SourceEntry : public Entry {
-		EventSource *source;
+	template<class S>
+	struct GenericSourceEntry : public Entry {
+		S *source;
 	};
 
-	List<SourceEntry> _sources;
+	typedef GenericSourceEntry<HardwareEventSource> HardwareSourceEntry;
+	typedef GenericSourceEntry<ActionEventSource> ActionSourceEntry;
+
+	List<HardwareSourceEntry> _hardwareSources;
+	List<ActionSourceEntry> _actionSources;
 
 	struct ObserverEntry : public Entry {
 		uint priority;
@@ -359,7 +352,7 @@ public:
 	/**
 	 * Pushes a "fake" event into the event queue
 	 */
-	virtual void pushEvent(const Event &event) = 0;
+	virtual void pushEvent(const ActionEvent &event) = 0;
 
 	/** Return the current mouse position */
 	virtual Point getMousePos() const = 0;

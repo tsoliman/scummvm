@@ -543,7 +543,7 @@ bool Engine::canSaveGameStateCurrently() {
 }
 
 void Engine::quitGame() {
-	Common::Event event;
+	Common::ActionEvent event;
 
 	event.type = Common::EVENT_QUIT;
 	g_system->getEventManager()->pushEvent(event);

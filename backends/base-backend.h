@@ -28,7 +28,7 @@
 
 class BaseBackend : public OSystem {
 protected:
-	virtual Common::EventSource *getDefaultEventSource() = 0;
+	virtual Common::HardwareEventSource *getDefaultEventSource() = 0;
 public:
 	virtual void initBackend();
 
@@ -36,9 +36,9 @@ public:
 	virtual void fillScreen(uint32 col);
 };
 
-class EventsBaseBackend : public BaseBackend, Common::EventSource {
+class EventsBaseBackend : public BaseBackend, Common::HardwareEventSource {
 protected:
-	virtual Common::EventSource *getDefaultEventSource() { return this; }
+	virtual Common::HardwareEventSource *getDefaultEventSource() { return this; }
 public:
 };
 

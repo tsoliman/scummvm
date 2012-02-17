@@ -53,7 +53,7 @@ struct Action {
 	String description;
 
 	/** Events to be sent when mapped key is pressed */
-	List<Event> events;
+	List<ActionEvent> events;
 	ActionType type;
 	KeyType preferredKey;
 	int priority;
@@ -71,19 +71,19 @@ public:
 		   KeyType prefKey = kGenericKeyType,
 		   int pri = 0, int flg = 0 );
 
-	void addEvent(const Event &evt) {
+	void addEvent(const ActionEvent &evt) {
 		events.push_back(evt);
 	}
 
 	void addEvent(const EventType evtType) {
-		Event evt;
+		ActionEvent evt;
 
 		evt.type = evtType;
 		events.push_back(evt);
 	}
 
 	void addKeyEvent(const KeyState &ks) {
-		Event evt;
+		ActionEvent evt;
 
 		evt.type = EVENT_KEYDOWN;
 		evt.kbd = ks;

@@ -74,12 +74,12 @@ class DefaultEventManager : public Common::EventManager, Common::EventObserver {
 	} _currentKeyDown;
 	uint32 _keyRepeatTime;
 public:
-	DefaultEventManager(Common::EventSource *boss);
+	DefaultEventManager(Common::HardwareEventSource *boss);
 	~DefaultEventManager();
 
 	virtual void init();
 	virtual bool pollEvent(Common::Event &event);
-	virtual void pushEvent(const Common::Event &event);
+	virtual void pushEvent(const Common::ActionEvent &event);
 
 	virtual Common::Point getMousePos() const { return _mousePos; }
 	virtual int getButtonState() const { return _buttonState; }

@@ -50,7 +50,7 @@
 #define JOY_BUT_F5 5
 
 SdlEventSource::SdlEventSource()
-    : Common::EventSource(), _scrollLock(false), _joystick(0), _lastScreenID(0), _graphicsManager(0) {
+    : Common::HardwareEventSource(), _scrollLock(false), _joystick(0), _lastScreenID(0), _graphicsManager(0) {
 	// Reset mouse state
 	memset(&_km, 0, sizeof(_km));
 
@@ -342,7 +342,7 @@ Common::KeyCode SdlEventSource::SDLToOSystemKeycode(const SDLKey key) {
 	}
 }
 
-bool SdlEventSource::pollEvent(Common::Event &event) {
+bool SdlEventSource::pollEvent(Common::HardwareEvent &event) {
 	handleKbdMouse();
 
 	// If the screen changed, send an Common::EVENT_SCREEN_CHANGED

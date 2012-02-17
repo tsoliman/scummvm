@@ -138,8 +138,8 @@ public:
 	void popKeymap(const char *name = 0);
 
 	// Implementation of the EventMapper interface
-	bool notifyEvent(const Common::Event &ev);
-	bool pollEvent(Common::Event &ev) { return Common::ArtificialEventSource::pollEvent(ev); }
+	bool notifyEvent(const Common::HardwareEvent &ev);
+	bool pollEvent(Common::ActionEvent &ev) { return Common::ArtificialEventSource::pollEvent(ev); }
 
 	/**
 	 * @brief Map a key press event.
