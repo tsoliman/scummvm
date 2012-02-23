@@ -73,6 +73,19 @@ bool MaemoSdlEventSource::remapKey(SDL_Event &ev, Common::Event &event) {
 			}
 		}
 	}
+
+	if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F1) {
+		event.type = Common::EVENT_CUSTOM_BACKEND_HARDWARE;
+		event.customType = 4;
+		event.kbd.keycode = Common::KEYCODE_INVALID;
+		event.kbd.ascii = 0;
+		event.kbd.flags = 0;
+		return true;
+	}
+	if (ev.type == SDL_KEYUP && ev.key.keysym.sym == SDLK_F1) {
+		// don't let F1 UP through
+		return true;
+	}
 #else
 	switch (ev.type) {
 		case SDL_KEYDOWN:{

@@ -193,7 +193,9 @@ static const Common::KeyTableEntry maemoKeys[] = {
 
 #ifdef ENABLE_KEYMAPPER
 Common::HardwareInputSet *OSystem_SDL_Maemo::getHardwareInputSet() {
-	return new Common::HardwareInputSet(true, maemoKeys);
+	Common::HardwareInputSet *set = new Common::HardwareInputSet(true, maemoKeys);
+	set->addHardwareInput(new Common::HardwareInput("SWIPE", 4, "Swipe Gesture"));
+	return set;
 }
 
 Common::Keymap *OSystem_SDL_Maemo::getGlobalKeymap() {
