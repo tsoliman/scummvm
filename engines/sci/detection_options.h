@@ -33,7 +33,7 @@ const ADExtraGuiOptionsMap optionsList[] = {
 			_s("Skip EGA dithering pass (full color backgrounds)"),
 			_s("Skip dithering pass in EGA games, graphics are shown with full colors"),
 			"disable_dithering",
-			false,
+			true,
 			0,
 			0
 		}
