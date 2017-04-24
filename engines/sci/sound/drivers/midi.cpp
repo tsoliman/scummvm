@@ -241,7 +241,10 @@ MidiPlayer_Midi::MidiPlayer_Midi(SciVersion version) :
 	_useMT32Track(true),
 	_missingFiles(nullptr) {
 
-	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(MDT_MIDI);
+	int deviceFlags = MDT_MIDI;
+	if (getSciVersion() < SCI_VERSION_2)
+		deviceFlags |= MDT_PREFER_MT32;
+	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(deviceFlags);
 	_driver = MidiDriver::createMidi(dev);
 
 	if (ConfMan.getInt("midi_mode") == kMidiModeD110) {
