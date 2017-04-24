@@ -231,7 +231,9 @@ private:
 
 MidiPlayer_Midi::MidiPlayer_Midi(SciVersion version) : MidiPlayer(version), _playSwitch(true), _masterVolume(15), _mt32Type(kMt32TypeNone), _mt32LCDSize(20), _hasReverb(false), _defaultReverb(-1), _useMT32Track(true), _missingFiles(nullptr) {
 	int deviceFlags = MDT_MIDI;
-	if (getSciVersion() < SCI_VERSION_2)
+	if (g_sci->_features->useAltWinGMSound())
+		deviceFlags |= MDT_PREFER_GM;
+	else if (getSciVersion() < SCI_VERSION_2)
 		deviceFlags |= MDT_PREFER_MT32;
 
 	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(deviceFlags);
