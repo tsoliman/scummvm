@@ -89,6 +89,8 @@ void SciMusic::init() {
 		deviceFlags |= MDT_PREFER_GM;
 	else if (getSciVersion() < SCI_VERSION_2)
 		deviceFlags |= MDT_PREFER_MT32;
+	else
+		deviceFlags |= MDT_PREFER_GM;
 
 	// SCI_VERSION_0_EARLY games apparently don't support the CMS. At least there
 	// is no patch resource 101 and I also haven't seen any CMS driver file so far.
