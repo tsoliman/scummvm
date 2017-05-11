@@ -569,6 +569,11 @@ begin_credits("Credits");
 				add_person("Peter Kohaut", "peterkohaut", "");
 			end_section();
 
+			begin_section("Buried");
+				add_person("Matthew Hoops", "clone2727", "");
+			end_section();
+
+
 			begin_section("CGE");
 				add_person("Arnaud Boutonn&eacute;", "Strangerke", "");
 				add_person("Paul Gilbert", "dreammaster", "");
@@ -1343,8 +1348,9 @@ begin_credits("Credits");
     "support while porting the engine to ScummVM.");
 
 	add_paragraph(
-    "Bob Bell, Michel Kripalani, Tommy Yune, from Presto Studios for ".
-    "providing the source code of The Journeyman Project: Pegasus Prime.");
+    "Bob Bell, David Black, Michel Kripalani, and Tommy Yune from Presto Studios ".
+    "for providing the source code of The Journeyman Project: Pegasus Prime ".
+    "and The Journeyman Project 2: Buried in Time.");
 
 	add_paragraph(
     "Electronic Arts IP Preservation Team, particularly Stefan Serbicki, and Vasyl Tsvirkunov of ".
