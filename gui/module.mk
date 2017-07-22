@@ -41,7 +41,7 @@ ifdef IPHONE
 MODULE_OBJS += \
 	browser.o
 else
-ifdef MACOSX
+ifdef 0
 MODULE_OBJS += \
 	browser_osx.o
 else

@@ -37,7 +37,7 @@ class BrowserDialog : public Dialog {
 public:
 	BrowserDialog(const char *title, bool dirBrowser);
 
-#ifdef MACOSX
+#if 0
 	~BrowserDialog();
 	virtual int runModal();
 #else
@@ -49,7 +49,7 @@ public:
 	const Common::FSNode	&getResult() { return _choice; }
 
 protected:
-#ifdef MACOSX
+#if 0
 	const void *_titleRef;
 	const void *_chooseRef;
 #else
@@ -63,7 +63,7 @@ protected:
 	Common::FSNode	_choice;
 	bool			_isDirBrowser;
 
-#ifndef MACOSX
+#if 1
 	void updateListing();
 #endif
 };
