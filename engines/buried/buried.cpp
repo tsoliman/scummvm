@@ -94,13 +94,13 @@ Common::Error BuriedEngine::run() {
 		// Can't play 24bpp version without support
 		return Common::kUnsupportedColorMode;
 #else
-		initGraphics(640, 480, true, 0);
+		initGraphics(640, 480, 0);
 
 		if (_system->getScreenFormat().bytesPerPixel == 1)
 			return Common::kUnsupportedColorMode;
 #endif
 	} else {
-		initGraphics(640, 480, true);
+		initGraphics(640, 480);
 	}
 
 	if (isWin95()) {
