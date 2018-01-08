@@ -91,8 +91,11 @@ struct QueueRequest {
 bool operator==(const QueueRequest &arg1, const QueueRequest &arg2);
 bool operator!=(const QueueRequest &arg1, const QueueRequest &arg2);
 
+class CaldoriaBomb;
 class GameInteraction;
 class Item;
+class SubChase;
+class SubPlatform;
 class Neighborhood;
 
 class StriderCallBack : public TimeBaseCallBack {
@@ -109,7 +112,10 @@ protected:
 typedef Common::Queue<QueueRequest> NeighborhoodActionQueue;
 
 class Neighborhood : public IDObject, public NotificationReceiver, public InputHandler, public Idler {
+friend class CaldoriaBomb;
 friend class StriderCallBack;
+friend class SubChase;
+friend class SubPlatform;
 
 public:
 	Neighborhood(InputHandler *nextHandler, PegasusEngine *vm, const Common::String &resName, NeighborhoodID id);
@@ -290,7 +296,7 @@ protected:
 
 	virtual void createNeighborhoodSpots();
 
-	void resetLastExtra() { _lastExtra = -1; }
+	void resetLastExtra() { _lastExtra = 0xffffffff; }
 
 	virtual void throwAwayInterface();
 
@@ -352,7 +358,7 @@ protected:
 	AlternateID _currentAlternate;
 	HotSpotActivationID _currentActivation;
 
-	int32 _lastExtra;
+	ExtraID _lastExtra;
 	DeathReason _extraDeathReason;
 
 	// Graphics

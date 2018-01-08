@@ -44,7 +44,7 @@
 
 #include "common/memstream.h"
 
-#define DEFAULT_CONFIG_FILE "scummvm.ini"
+#define DEFAULT_CONFIG_FILE "Pegasus Prime.ini"
 
 void OSystem_Win32::init() {
 	// Initialize File System Factory
@@ -175,10 +175,10 @@ Common::String OSystem_Win32::getDefaultConfigFileName() {
 			}
 		}
 
-		strcat(configFile, "\\ScummVM");
+		strcat(configFile, "\\Pegasus Prime");
 		if (!CreateDirectory(configFile, NULL)) {
 			if (GetLastError() != ERROR_ALREADY_EXISTS)
-				error("Cannot create ScummVM application data folder");
+				error("Cannot create Pegasus Prime application data folder");
 		}
 
 		strcat(configFile, "\\" DEFAULT_CONFIG_FILE);
@@ -237,11 +237,11 @@ Common::WriteStream *OSystem_Win32::createLogFile() {
 			CreateDirectory(logFile, NULL);
 		}
 
-		strcat(logFile, "\\ScummVM");
+		strcat(logFile, "\\Pegasus Prime");
 		CreateDirectory(logFile, NULL);
 		strcat(logFile, "\\Logs");
 		CreateDirectory(logFile, NULL);
-		strcat(logFile, "\\scummvm.log");
+		strcat(logFile, "\\Pegasus Prime.log");
 
 		Common::FSNode file(logFile);
 		Common::WriteStream *stream = file.createWriteStream();

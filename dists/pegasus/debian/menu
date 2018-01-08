@@ -1,0 +1,3 @@
+?package(pegasusprime):needs="x11" section="Games/Adventure" \
+  title="Pegasus Prime" command="/usr/games/PegasusPrime" \
+  icon="/usr/share/icons/pegasus.xpm"

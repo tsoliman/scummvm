@@ -43,7 +43,7 @@
 
 OSystem_MacOSX::OSystem_MacOSX()
 	:
-	OSystem_POSIX("Library/Preferences/ScummVM Preferences") {
+	OSystem_POSIX("Library/Preferences/Pegasus Prime Preferences") {
 }
 
 void OSystem_MacOSX::init() {

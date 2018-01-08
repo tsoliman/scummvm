@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Pegasus Prime
+Comment=The epic time travel adventure begins
+Exec=PegasusPrime
+Icon=pegasus
+Terminal=false
+Type=Application
+Categories=Game;AdventureGame;
+StartupNotify=false

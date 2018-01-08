@@ -318,6 +318,10 @@ void InventoryItemsPicture::deactivateInventoryPicture() {
 	}
 }
 
+void InventoryItemsPicture::setCommPicture() {
+	_pictName = "Images/Items/Inventory/Comm Panel";
+}
+
 void InventoryItemsPicture::playEndMessage(DisplayElement *pushElement) {
 	PegasusEngine *vm = (PegasusEngine *)g_engine;
 
@@ -326,11 +330,13 @@ void InventoryItemsPicture::playEndMessage(DisplayElement *pushElement) {
 	_shouldDrawHighlight = false;
 	endMessage.shareSurface(this);
 	endMessage.initFromMovieFile("Images/Caldoria/A56 Congrats");
+	endMessage.setVolume(((PegasusEngine *)g_engine)->getSoundFXLevel());
 	endMessage.moveMovieBoxTo(kFinalMessageLeft - kInventoryPushLeft, kFinalMessageTop - kInventoryPushTop);
 	endMessage.setTriggeredElement(pushElement);
 	endMessage.start();
 
 	while (endMessage.isRunning()) {
+		InputDevice.pumpEvents();
 		vm->checkCallBacks();
 		vm->refreshDisplay();
 		g_system->delayMillis(10);

@@ -25,16 +25,20 @@
 
 #include "common/events.h"
 #include "video/qt_decoder.h"
+#include "video/theora_decoder.h"
 
 #include "pegasus/cursor.h"
 #include "pegasus/energymonitor.h"
 #include "pegasus/gamestate.h"
 #include "pegasus/pegasus.h"
 #include "pegasus/ai/ai_area.h"
+#include "pegasus/items/biochips/arthurchip.h"
 #include "pegasus/items/biochips/opticalchip.h"
 #include "pegasus/items/biochips/shieldchip.h"
 #include "pegasus/items/inventory/airmask.h"
+#include "pegasus/neighborhood/mars/canyonchase.h"
 #include "pegasus/neighborhood/mars/mars.h"
+#include "pegasus/neighborhood/mars/tunnelpod.h"
 
 namespace Pegasus {
 
@@ -44,6 +48,10 @@ static const int16 kMarsShieldPanelOffsetAngle = 22;
 
 static const CanMoveForwardReason kCantMoveRobotBlocking = kCantMoveLastReason + 1;
 
+static const ExtraID kMarsTurnOnSteerPod = 1000;
+static const ExtraID kMarsRobotBobSlow = 1001;
+static const ExtraID kMarsRobotGenoSlow = 1002;
+
 static const NotificationFlags kTimeForCanyonChaseFlag = kLastNeighborhoodNotificationFlag << 1;
 static const NotificationFlags kExplosionFinishedFlag = kTimeForCanyonChaseFlag << 1;
 static const NotificationFlags kTimeToTransportFlag = kExplosionFinishedFlag << 1;
@@ -51,6 +59,13 @@ static const NotificationFlags kTimeToTransportFlag = kExplosionFinishedFlag << 
 static const NotificationFlags kMarsNotificationFlags = kTimeForCanyonChaseFlag |
 													kExplosionFinishedFlag |
 													kTimeToTransportFlag;
+
+static const TimeValue kBucketClimbInTime = 1393980;
+static const TimeValue kBucketSeeGearRoomTime = 2240;
+static const TimeValue kBucketClimbOutTime = 1340;
+
+static const TimeValue kPodCautionDisplayedTime = 1631;
+static const TimeValue kPodCautionDismissedTime = 3889;
 
 static const TimeValue kLittleExplosionStart = 0 * 40;
 static const TimeValue kLittleExplosionStop = 24 * 40;
@@ -90,16 +105,17 @@ void MarsTimerEvent::fire() {
 }
 
 Mars::Mars(InputHandler *nextHandler, PegasusEngine *owner) : Neighborhood(nextHandler, owner, "Mars", kMarsID),
-		_guessObject(kNoDisplayElement), _undoPict(kNoDisplayElement), _guessHistory(kNoDisplayElement),
-		_choiceHighlight(kNoDisplayElement), _shuttleInterface1(kNoDisplayElement), _shuttleInterface2(kNoDisplayElement),
-		_shuttleInterface3(kNoDisplayElement), _shuttleInterface4(kNoDisplayElement), _canyonChaseMovie(kNoDisplayElement),
-		_leftShuttleMovie(kNoDisplayElement), _rightShuttleMovie(kNoDisplayElement), _lowerLeftShuttleMovie(kNoDisplayElement),
-		_lowerRightShuttleMovie(kNoDisplayElement), _centerShuttleMovie(kNoDisplayElement),
-		_upperLeftShuttleMovie(kNoDisplayElement), _upperRightShuttleMovie(kNoDisplayElement),
-		_leftDamageShuttleMovie(kNoDisplayElement), _rightDamageShuttleMovie(kNoDisplayElement), _explosions(kNoDisplayElement),
-		_planetMovie(kNoDisplayElement), _junk(kNoDisplayElement), _energyChoiceSpot(kShuttleEnergySpotID),
-		_gravitonChoiceSpot(kShuttleGravitonSpotID), _tractorChoiceSpot(kShuttleTractorSpotID),
-		_shuttleViewSpot(kShuttleViewSpotID), _shuttleTransportSpot(kShuttleTransportSpotID) {
+		_extraMovie(kNoDisplayElement), _guessObject(kNoDisplayElement), _undoPict(kNoDisplayElement),
+		_guessHistory(kNoDisplayElement), _choiceHighlight(kNoDisplayElement), _shuttleInterface1(kNoDisplayElement),
+		_shuttleInterface2(kNoDisplayElement), _shuttleInterface3(kNoDisplayElement), _shuttleInterface4(kNoDisplayElement),
+		_canyonChaseMovie(kNoDisplayElement), _leftShuttleMovie(kNoDisplayElement), _rightShuttleMovie(kNoDisplayElement),
+		_lowerLeftShuttleMovie(kNoDisplayElement), _lowerRightShuttleMovie(kNoDisplayElement),
+		_centerShuttleMovie(kNoDisplayElement), _upperLeftShuttleMovie(kNoDisplayElement),
+		_upperRightShuttleMovie(kNoDisplayElement), _leftDamageShuttleMovie(kNoDisplayElement),
+		_rightDamageShuttleMovie(kNoDisplayElement), _explosions(kNoDisplayElement), _planetMovie(kNoDisplayElement),
+		_junk(kNoDisplayElement), _energyChoiceSpot(kShuttleEnergySpotID), _gravitonChoiceSpot(kShuttleGravitonSpotID),
+		_tractorChoiceSpot(kShuttleTractorSpotID), _shuttleViewSpot(kShuttleViewSpotID),
+		_shuttleTransportSpot(kShuttleTransportSpotID) {
 	_noAirFuse.setFunctor(new Common::Functor0Mem<void, Mars>(this, &Mars::airStageExpired));
 	setIsItemTaken(kMarsCard);
 	setIsItemTaken(kAirMask);
@@ -126,10 +142,23 @@ void Mars::init() {
 
 	_neighborhoodNotification.notifyMe(this, kMarsNotificationFlags, kMarsNotificationFlags);
 
+	_extraMovieCallBack.setNotification(&_neighborhoodNotification);
+
 	_explosionCallBack.setNotification(&_neighborhoodNotification);
 	_explosionCallBack.setCallBackFlag(kExplosionFinishedFlag);
 
 	_weaponSelection = kNoWeapon;
+}
+
+GameInteraction *Mars::makeInteraction(const InteractionID interactionID) {
+	switch (interactionID) {
+	case kMarsTunnelPodInteractionID:
+		return new TunnelPod(this);
+	case kMarsCanyonChaseInteractionID:
+		return new CanyonChase(this);
+	default:
+		return NULL;
+	}
 }
 
 void Mars::flushGameState() {
@@ -142,6 +171,71 @@ void Mars::start() {
 	_vm->resetEnergyDeathReason();
 	g_energyMonitor->startEnergyDraining();
 	Neighborhood::start();
+}
+
+class ArthurOxygen50Action : public AIPlayMessageAction {
+public:
+	ArthurOxygen50Action();
+
+	virtual void performAIAction(AIRule *);
+};
+
+ArthurOxygen50Action::ArthurOxygen50Action() : AIPlayMessageAction("Images/AI/Mars/XMMAZB1", false, kWarningInterruption) {
+}
+
+void ArthurOxygen50Action::performAIAction(AIRule *rule) {
+	PegasusEngine *vm = (PegasusEngine *)g_engine;
+
+	if (GameState.isTakenItemID(kArthurBiochip) && g_arthurChip && vm->isChattyArthur())
+		g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA84", kArthurMarsOxygen50Warning);
+	else
+		AIPlayMessageAction::performAIAction(rule);
+}
+
+class ArthurOxygen25Action : public AIPlayMessageAction {
+public:
+	ArthurOxygen25Action();
+
+	virtual void performAIAction(AIRule *);
+};
+
+ArthurOxygen25Action::ArthurOxygen25Action() : AIPlayMessageAction("Images/AI/Mars/XMMAZB2", false, kWarningInterruption) {
+}
+
+void ArthurOxygen25Action::performAIAction(AIRule *rule) {
+	PegasusEngine *vm = (PegasusEngine *)g_engine;
+
+	if (GameState.isTakenItemID(kArthurBiochip) && g_arthurChip && vm->isChattyArthur()) {
+		if (vm->getRandomBit())
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA85", kArthurMarsOxygen25Warning);
+		else
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA87", kArthurMarsOxygen25Warning);
+	} else {
+		AIPlayMessageAction::performAIAction(rule);
+	}
+}
+
+class ArthurOxygen5Action : public AIPlayMessageAction {
+public:
+	ArthurOxygen5Action();
+
+	virtual void performAIAction(AIRule *);
+};
+
+ArthurOxygen5Action::ArthurOxygen5Action() : AIPlayMessageAction("Images/AI/Mars/XMMAZB3", false, kWarningInterruption) {
+}
+
+void ArthurOxygen5Action::performAIAction(AIRule *rule) {
+	PegasusEngine *vm = (PegasusEngine *)g_engine;
+
+	if (GameState.isTakenItemID(kArthurBiochip) && g_arthurChip && vm->isChattyArthur()) {
+		if (vm->getRandomBit())
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA86", kArthurMarsOxygen5Warning);
+		else
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA88", kArthurMarsOxygen5Warning);
+	} else {
+		AIPlayMessageAction::performAIAction(rule);
+	}
 }
 
 class AirMaskCondition : public AICondition {
@@ -210,12 +304,18 @@ void Mars::setUpAIRules() {
 		g_AIArea->addAIRule(rule);
 
 		AirMaskCondition *airMask50Condition = new AirMaskCondition(50);
-		messageAction = new AIPlayMessageAction("Images/AI/Mars/XMMAZB1", false);
+		if (_vm->isDVD())
+			messageAction = new ArthurOxygen50Action();
+		else
+			messageAction = new AIPlayMessageAction("Images/AI/Mars/XMMAZB1", false);
 		AIRule *rule50 = new AIRule(airMask50Condition, messageAction);
 
 		AirMaskCondition *airMask25Condition = new AirMaskCondition(25);
 		AICompoundAction *compound = new AICompoundAction();
-		messageAction = new AIPlayMessageAction("Images/AI/Mars/XMMAZB2", false);
+		if (_vm->isDVD())
+			messageAction = new ArthurOxygen25Action();
+		else
+			messageAction = new AIPlayMessageAction("Images/AI/Mars/XMMAZB2", false);
 		compound->addAction(messageAction);
 		deactivate = new AIDeactivateRuleAction(rule50);
 		compound->addAction(deactivate);
@@ -223,7 +323,10 @@ void Mars::setUpAIRules() {
 
 		AirMaskCondition *airMask5Condition = new AirMaskCondition(5);
 		compound = new AICompoundAction;
-		messageAction = new AIPlayMessageAction("Images/AI/Mars/XMMAZB3", false);
+		if (_vm->isDVD())
+			messageAction = new ArthurOxygen5Action();
+		else
+			messageAction = new AIPlayMessageAction("Images/AI/Mars/XMMAZB3", false);
 		compound->addAction(messageAction);
 		deactivate = new AIDeactivateRuleAction(rule50);
 		compound->addAction(deactivate);
@@ -396,8 +499,155 @@ void Mars::cantMoveThatWay(CanMoveForwardReason reason) {
 }
 
 void Mars::moveForward() {
-	if (GameState.getCurrentRoom() == kMars02 || (GameState.getCurrentRoom() >= kMars05 && GameState.getCurrentRoom() <= kMars08))
+	if (GameState.getCurrentRoom() == kMars02 || (GameState.getCurrentRoom() >= kMars05 && GameState.getCurrentRoom() <= kMars08)) {
 		loadLoopSound2("");
+	} else if (_vm->isDVD()) {
+		Movie movie(kNoDisplayElement);
+		Input input;
+
+		if (!GameState.isTakenItemID(kCardBomb) &&
+			GameState.getCurrentRoom() == kMars60 &&
+			GameState.getCurrentDirection() == kWest) {
+			loadLoopSound1("");
+			loadLoopSound2("");
+			movie.initFromMovieFile("Images/Mars/MMbomb.mov");
+			movie.setVolume(_vm->getSoundFXLevel());
+			movie.moveElementTo(kNavAreaLeft, kNavAreaTop);
+			movie.setDisplayOrder(kNavMovieOrder + 1);
+			movie.startDisplaying();
+			movie.show();
+			movie.start();
+
+			while (movie.isRunning() && !_vm->shouldQuit()) {
+				InputDevice.getInput(input, kFilterNoInput);
+
+				_vm->checkCallBacks();
+				_vm->refreshDisplay();
+				_vm->_system->delayMillis(10);
+			}
+
+			if (_vm->shouldQuit())
+				return;
+
+			movie.moveElementTo(0, 0);
+			_vm->_gfx->setCurSurface(_navMovie.getSurface());
+			movie.copyToCurrentPort();
+			_vm->_gfx->setCurSurface(_vm->_gfx->getWorkArea());
+
+			movie.hide();
+			movie.stopDisplaying();
+			movie.releaseMovie();
+
+			didntFindBomb();
+			return;
+		} else if (!GameState.getWalkthroughMode() &&
+					GameState.getCurrentRoom() == kMarsMaze200 &&
+					GameState.getCurrentDirection() == kWest) {
+			ExitTable::Entry exitEntry;
+			Common::Rect pushBounds;
+			bool leavingBucket;
+
+			// Fall down the shaft immediately if we miss the climb-in
+			if (_navMovie.getTime() >= kBucketClimbInTime) {
+				_navMovie.stop();
+
+				movie.initFromMovieFile("Images/Mars/MMfall.mov");
+				movie.setVolume(_vm->getSoundFXLevel());
+				movie.moveElementTo(kNavAreaLeft, kNavAreaTop);
+				movie.setDisplayOrder(kNavMovieOrder + 1);
+				movie.startDisplaying();
+				movie.show();
+				movie.start();
+
+				while (movie.isRunning() && !_vm->shouldQuit()) {
+					InputDevice.getInput(input, kFilterNoInput);
+
+					_vm->checkCallBacks();
+					_vm->refreshDisplay();
+					_vm->_system->delayMillis(10);
+				}
+
+				if (_vm->shouldQuit())
+					return;
+
+				movie.moveElementTo(0, 0);
+				_vm->_gfx->setCurSurface(_navMovie.getSurface());
+				movie.copyToCurrentPort();
+				_vm->_gfx->setCurSurface(_vm->_gfx->getWorkArea());
+
+				movie.hide();
+				movie.stopDisplaying();
+				movie.releaseMovie();
+
+				die(kDeathMissedOreBucket);
+				return;
+			}
+			
+			canMoveForward(exitEntry);
+
+			leavingBucket = false;
+			_navMovie.stop();
+			_turnPush.getBounds(pushBounds);
+			_navMovie.moveElementTo(pushBounds.left, pushBounds.top);
+			_navMovie.show();
+			_navMovie.setFlags(0);
+
+			// Set segment so we can skip ahead as needed
+			// Ride up the shaft but don't try to get out
+			_navMovie.setSegment(exitEntry.movieStart, exitEntry.movieEnd - kBucketClimbOutTime);
+			_navMovie.setTime(exitEntry.movieStart);
+			_navMovie.start();
+			while (_navMovie.isRunning() && _navMovie.getTime() < exitEntry.movieEnd - kBucketSeeGearRoomTime) {
+				InputDevice.getInput(input, kFilterAllDirections);
+
+				if (input.upButtonDown() ||
+					input.downButtonDown() ||
+					input.leftButtonDown() ||
+					input.rightButtonDown()) {
+					_navMovie.stop();
+					_vm->getDeathSound().initFromAIFFFile("Sounds/Mars/Mars Maze Fall.AIFF");
+					_vm->getDeathSound().setVolume(_vm->getSoundFXLevel());
+					_vm->getDeathSound().playSound();
+					die(kDeathMissedOreBucket);
+					return;
+				}
+
+				_vm->checkCallBacks();
+				_vm->refreshDisplay();
+				g_system->delayMillis(10);
+			}
+
+			// We can see the gear room at this point so it's safe to try to get out
+			_navMovie.setTime(exitEntry.movieEnd - kBucketSeeGearRoomTime);
+			while (_navMovie.isRunning()) {
+				InputDevice.getInput(input, kFilterAllDirections);
+
+				if (input.upButtonAnyDown()) {
+					leavingBucket = true;
+				} else if (input.anyDirectionInput()) {
+					_navMovie.stop();
+					_vm->getDeathSound().initFromAIFFFile("Sounds/Mars/Mars Maze Fall.AIFF");
+					_vm->getDeathSound().setVolume(_vm->getSoundFXLevel());
+					_vm->getDeathSound().playSound();
+					die(kDeathMissedOreBucket);
+					return;
+				}
+
+				_vm->checkCallBacks();
+				_vm->refreshDisplay();
+				g_system->delayMillis(10);
+			}
+			_navMovie.stop();
+
+			if (leavingBucket) {
+				exitEntry.movieStart = exitEntry.movieEnd - kBucketClimbOutTime;
+				startExitMovie(exitEntry);
+			} else {
+				playDeathExtra(kMars200DeathInBucket, kDeathDidntLeaveBucket);
+			}
+			return;
+		}
+	}
 
 	Neighborhood::moveForward();
 }
@@ -535,6 +785,10 @@ void Mars::doorOpened() {
 }
 
 void Mars::setUpReactorEnergyDrain() {
+	// If there's no energy monitor, there's nothing to do
+	if (!g_energyMonitor)
+		return;
+
 	switch (GameState.getCurrentRoomAndView()) {
 	case MakeRoomView(kMars51, kEast):
 		if (GameState.isCurrentDoorOpen()) {
@@ -709,6 +963,88 @@ void Mars::checkAirlockDoors() {
 	}
 }
 
+void Mars::startDoorOpenMovie(const TimeValue startTime, const TimeValue stopTime) {
+	Movie movie(kNoDisplayElement);
+	Input input;
+
+	if (_vm->isDVD() && GameState.getCurrentRoomAndView() == MakeRoomView(kMars18, kNorth) &&
+		GameState.getMarsPodAtUpperPlatform()) {
+		movie.initFromMovieFile("Images/Mars/M45DF.movie");
+		movie.setVolume(_vm->getSoundFXLevel());
+		movie.moveElementTo(kNavAreaLeft, kNavAreaTop);
+		movie.setDisplayOrder(kNavMovieOrder + 1);
+		movie.startDisplaying();
+		movie.show();
+		movie.start();
+
+		while (movie.isRunning() && !_vm->shouldQuit()) {
+			InputDevice.getInput(input, kFilterNoInput);
+
+			_vm->checkCallBacks();
+			_vm->refreshDisplay();
+			_vm->_system->delayMillis(10);
+		}
+
+		if (_vm->shouldQuit())
+			return;
+
+		movie.moveElementTo(0, 0);
+		_vm->_gfx->setCurSurface(_navMovie.getSurface());
+		movie.copyToCurrentPort();
+		_vm->_gfx->setCurSurface(_vm->_gfx->getWorkArea());
+
+		movie.hide();
+		movie.stopDisplaying();
+		movie.releaseMovie();
+
+		Neighborhood::doorOpened();
+	} else {
+		Neighborhood::startDoorOpenMovie(startTime, stopTime);
+	}
+}
+
+void Mars::startExitMovie(const ExitTable::Entry &exitEntry) {
+	Movie movie(kNoDisplayElement);
+	Input input;
+
+	if (_vm->isDVD() && GameState.getCurrentRoomAndView() == MakeRoomView(kMars18, kNorth) &&
+		GameState.getMarsPodAtUpperPlatform()) {
+		movie.initFromMovieFile("Images/Mars/M45DG.movie");
+		movie.setVolume(_vm->getSoundFXLevel());
+		movie.moveElementTo(kNavAreaLeft, kNavAreaTop);
+		movie.setDisplayOrder(kNavMovieOrder + 1);
+		movie.startDisplaying();
+		movie.show();
+		movie.start();
+
+		while (movie.isRunning() && !_vm->shouldQuit()) {
+			InputDevice.getInput(input, kFilterNoInput);
+
+			_vm->checkCallBacks();
+			_vm->refreshDisplay();
+			_vm->_system->delayMillis(10);
+		}
+
+		if (_vm->shouldQuit())
+			return;
+
+		movie.moveElementTo(0, 0);
+		_vm->_gfx->setCurSurface(_navMovie.getSurface());
+		movie.copyToCurrentPort();
+		_vm->_gfx->setCurSurface(_vm->_gfx->getWorkArea());
+
+		movie.hide();
+		movie.stopDisplaying();
+		movie.releaseMovie();
+
+		arriveAt(kMars32, kNorth);
+	} else {
+		Neighborhood::startExitMovie(exitEntry);
+	}
+	if (GameState.getCurrentRoomAndView() == MakeRoomView(kMars43, kEast) && g_arthurChip)
+		g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA07", kArthurMarsEnteredShuttle);
+}
+
 int16 Mars::getStaticCompassAngle(const RoomID room, const DirectionConstant dir) {
 	int16 angle = Neighborhood::getStaticCompassAngle(room, dir);
 
@@ -877,33 +1213,78 @@ void Mars::getExtraCompassMove(const ExtraTable::Entry &entry, FaderMoveSpec &co
 }
 
 void Mars::loadAmbientLoops() {
+	// Don't load an ambient loop if we died in a chase sequence
+	if (_vm->getEnergyDeathReason() == kDeathRanIntoCanyonWall || _vm->getEnergyDeathReason() == kDeathCollidedWithPod)
+		return;
+
 	RoomID room = GameState.getCurrentRoom();
 
 	if ((room >= kMars0A && room <= kMars21) || (room >= kMars41 && room <= kMars43)) {
-		if (GameState.getMarsSeenTimeStream())
-			loadLoopSound1("Sounds/Mars/Gantry Ambient.22K.8.AIFF");
+		if (GameState.getMarsSeenTimeStream()) {
+			if (_vm->isDVD()) // Updated for the DVD version
+				loadLoopSound1("Sounds/Mars/Gantry Ambient.32K.16.AIFF");
+			else
+				loadLoopSound1("Sounds/Mars/Gantry Ambient.22K.8.AIFF");
+		}
 	} else if (room >= kMars22 && room <= kMars31South) {
-		loadLoopSound1("Sounds/Mars/Reception.02.22K.8.AIFF", 0x100 / 4);
+		if (_vm->isDVD()) // Updated for the DVD version
+			loadLoopSound1("Sounds/Mars/Reception.02.32K.16.AIFF", 0x100 / 4);
+		else
+			loadLoopSound1("Sounds/Mars/Reception.02.22K.8.AIFF", 0x100 / 4);
 	} else if (room >= kMars32 && room <= kMars34) {
-		loadLoopSound1("Sounds/Mars/Pod Room Ambient.22K.8.AIFF");
+		if (_vm->isDVD()) // Updated for the DVD version
+			loadLoopSound1("Sounds/Mars/Pod Room Ambient.32K.16.AIFF");
+		else
+			loadLoopSound1("Sounds/Mars/Pod Room Ambient.22K.8.AIFF");
 	} else if (room == kMars35) {
-		if (getAirQuality(room) == kAirQualityVacuum)
-			loadLoopSound1("Sounds/Mars/Gear Room Ambient.22K.8.AIFF");
-		else
-			loadLoopSound1("Sounds/Mars/Gantry Ambient.22K.8.AIFF", 0x100 / 2);
+		if (getAirQuality(room) == kAirQualityVacuum) {
+			if (_vm->isDVD()) // Updated for the DVD version
+				loadLoopSound1("Sounds/Mars/Gear Room Ambient.44K.16.AIFF");
+			else
+				loadLoopSound1("Sounds/Mars/Gear Room Ambient.22K.8.AIFF");
+		} else {
+			if (_vm->isDVD()) // Updated for the DVD version
+				loadLoopSound1("Sounds/Mars/Gantry Ambient.32K.16.AIFF", 0x100 / 2);
+			else
+				loadLoopSound1("Sounds/Mars/Gantry Ambient.22K.8.AIFF", 0x100 / 2);
+		}
 	} else if (room >= kMars36 && room <= kMars39) {
-		loadLoopSound1("Sounds/Mars/Gear Room Ambient.22K.8.AIFF");
-	} else if (room >= kMars45 && room <= kMars51) {
-		loadLoopSound1("Sounds/Mars/Lower Mars Ambient.22K.8.AIFF");
-	} else if (room >= kMars52 && room <= kMars58) {
-		loadLoopSound1("Sounds/Mars/ReactorLoop.22K.8.AIFF");
-	} else if (room == kMars60) {
-		if (getAirQuality(room) == kAirQualityVacuum)
-			loadLoopSound1("Sounds/Mars/Mars Maze Ambient.22K.8.AIFF");
+		if (_vm->isDVD()) // Updated for the DVD version
+			loadLoopSound1("Sounds/Mars/Gear Room Ambient.44K.16.AIFF");
 		else
-			loadLoopSound1("Sounds/Mars/Lower Mars Ambient.22K.8.AIFF", 0x100 / 2);
+			loadLoopSound1("Sounds/Mars/Gear Room Ambient.22K.8.AIFF");
+	} else if (room >= kMars45 && room <= kMars51) {
+		if (_vm->isDVD()) // Updated for the DVD version
+			loadLoopSound1("Sounds/Mars/Lower Mars Ambient.32K.16.AIFF");
+		else
+			loadLoopSound1("Sounds/Mars/Lower Mars Ambient.22K.8.AIFF");
+	} else if (room >= kMars52 && room <= kMars58) {
+		if (_vm->isDVD()) // Updated for the DVD version
+			loadLoopSound1("Sounds/Mars/ReactorLoop.44K.16.AIFF");
+		else
+			loadLoopSound1("Sounds/Mars/ReactorLoop.22K.8.AIFF");
+	} else if (room == kMars60) {
+		if (getAirQuality(room) == kAirQualityVacuum) {
+			if (_vm->isDVD()) // Updated for the DVD version
+				loadLoopSound1("Sounds/Mars/Mars Maze Ambient.32K.16.AIFF");
+			else
+				loadLoopSound1("Sounds/Mars/Mars Maze Ambient.22K.8.AIFF");
+		} else {
+			if (_vm->isDVD()) // Updated for the DVD version
+				loadLoopSound1("Sounds/Mars/Lower Mars Ambient.32K.16.AIFF", 0x100 / 2);
+			else
+				loadLoopSound1("Sounds/Mars/Lower Mars Ambient.22K.8.AIFF", 0x100 / 2);
+		}
 	} else if (room >= kMarsMaze004 && room <= kMarsMaze200) {
-		loadLoopSound1("Sounds/Mars/Mars Maze Ambient.22K.8.AIFF");
+		if (_vm->isDVD()) { // Updated for the DVD version
+			if (GameState.getEasterEgg() || room == kMarsMaze200 ||
+				(room == kMarsMaze199 && GameState.getCurrentDirection() == kWest))
+				loadLoopSound1("Sounds/Mars/Mars Maze Ambient.32K.16.AIFF");
+			else
+				loadLoopSound1("Sounds/Mars/Mars Maze GenoLoop.32K.16.AIFF");
+		} else {
+			loadLoopSound1("Sounds/Mars/Mars Maze Ambient.22K.8.AIFF");
+		}
 	} else if (room == kMarsRobotShuttle) {
 		loadLoopSound1("Sounds/Mars/Robot Shuttle.22K.8.AIFF");
 	}
@@ -1130,6 +1511,9 @@ void Mars::timerExpired(const uint32 eventType) {
 }
 
 void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
+	Input input;
+	InventoryItem *item;
+
 	switch (MakeRoomView(room, direction)) {
 	case MakeRoomView(kMars18, kNorth):
 		if (GameState.getMarsPodAtUpperPlatform())
@@ -1141,6 +1525,14 @@ void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
 			setCurrentAlternate(kAltMarsTookCard);
 		else
 			setCurrentAlternate(kAltMarsNormal);
+		break;
+	case MakeRoomView(kMars31South, kSouth):
+		if (!GameState.isTakenItemID(kMarsCard) && g_arthurChip) {
+			if (_vm->getRandomBit())
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA05", kArthurMarsZoomedToKeyCard);
+			else
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA96", kArthurMarsZoomedToKeyCard);
+		}
 		break;
 	case MakeRoomView(kMars35, kEast):
 	case MakeRoomView(kMars35, kWest):
@@ -1155,6 +1547,8 @@ void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
 			setCurrentAlternate(kAltMars60AirlockEast);
 		else
 			setCurrentAlternate(kAltMars60AirlockWest);
+		if (!(g_airMask && g_airMask->getAirLeft() > 0) && g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA39", kArthurMarsInAirlockNoOxygen);
 		break;
 	case MakeRoomView(kMars45, kNorth):
 	case MakeRoomView(kMars45, kSouth):
@@ -1175,6 +1569,12 @@ void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
 			setCurrentAlternate(kAltMarsNormal);
 		else
 			setCurrentAlternate(kAltMarsPodAtMars45);
+		if (g_arthurChip && room == kMars46) {
+			if (direction == kEast && !GameState.isTakenItemID(kCrowbar))
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA34", kArthurMarsLeftPodNoCrowBar);
+			else if (direction == kWest && GameState.getMarsPodAtUpperPlatform())
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA82", kArthurMarsLookAtEmptyTracks);
+		}
 		break;
 	case MakeRoomView(kMars48, kNorth):
 	case MakeRoomView(kMars48, kSouth):
@@ -1196,6 +1596,16 @@ void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
 		else
 			setCurrentAlternate(kAltMarsNormal);
 		break;
+	case MakeRoomView(kMarsMaze004, kWest):
+		if (_vm->isDVD() && GameState.getCurrentRoom() == kMars60) {
+			InputDevice.getInput(input, kFilterAllInput);
+			// Check easter egg modifier for the Geno mix
+			if (JMPPPInput::isEasterEggModifierInput(input))
+				GameState.setEasterEgg(true);
+			else
+				GameState.setEasterEgg(false);
+		}
+		break;
 	}
 
 	Neighborhood::arriveAt(room, direction);
@@ -1207,12 +1617,22 @@ void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
 		if (!GameState.getMarsSeenTimeStream())
 			startExtraLongSequence(kMarsArrivalFromTSA, kMars0AWatchShuttleDepart, kExtraCompletedFlag, kFilterNoInput);
 		break;
+	case MakeRoomView(kMars07, kNorth):
+		item = (InventoryItem *)g_allItems.findItemByID(kNitrogenCanister);
+		if (((g_airMask && g_airMask->getAirLeft() > 0) || item->getItemState() == kNitrogenFull) && g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA24", kArthurMarsSawWelcomeVideos);
+		break;
 	case MakeRoomView(kMars07, kSouth):
 	case MakeRoomView(kMars13, kNorth):
 		if (!GameState.getMarsHeardCheckInMessage()) {
 			playSpotSoundSync(kMarsCheckInRequiredIn, kMarsCheckInRequiredOut);
 			GameState.setMarsHeardCheckInMessage(true);
 		}
+		break;
+	case MakeRoomView(kMars41, kEast):
+	case MakeRoomView(kMars42, kEast):
+		if (g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA73", kArthurMarsFoundNoShuttlePresent);
 		break;
 	case MakeRoomView(kMars44, kWest):
 		if (GameState.getMarsReadyForShuttleTransport())
@@ -1229,6 +1649,8 @@ void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
 	case MakeRoomView(kMars11, kSouth):
 	case MakeRoomView(kMars12, kSouth):
 		setCurrentActivation(kActivationReadyForKiosk);
+		if (g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA33", kArthurMarsReadyForKiosk);
 		break;
 	case MakeRoomView(kMars15, kWest):
 		if (GameState.getMarsThreadedMaze() && !GameState.getMarsSecurityDown()) {
@@ -1253,8 +1675,11 @@ void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
 	case MakeRoomView(kMars19, kNorth):
 	case MakeRoomView(kMars19, kSouth):
 	case MakeRoomView(kMars19, kWest):
-		if (GameState.getMarsThreadedMaze() && !GameState.getMarsSawRobotLeave())
+		if (GameState.getMarsThreadedMaze() && !GameState.getMarsSawRobotLeave()) {
 			forceStridingStop(kMars19, kWest, kAltMarsNormal);
+			if (g_arthurChip)
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA38", kArthurMarsExitedGearRoom);
+		}
 
 		if (GameState.getMarsThreadedMaze() && !GameState.getMarsSecurityDown())
 			forceStridingStop(kMars17, kWest, kAltMarsNormal);
@@ -1305,8 +1730,24 @@ void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
 			setCurrentActivation(kActivateReadyToPressurizeAirlock);
 		break;
 	case MakeRoomView(kMars39, kWest):
-		if (GameState.getLastRoom() == kMarsMaze200)
+		if (GameState.getLastRoom() == kMarsMaze200) {
 			GameState.setMarsPodAtUpperPlatform(false);
+			if (_vm->isDVD())
+				GameState.setEasterEgg(false);
+		}
+		if (g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBB40", kArthurMarsEnteredGearRoom);
+		break;
+	case MakeRoomView(kMars39, kNorth):
+	case MakeRoomView(kMars39, kSouth):
+	case MakeRoomView(kMars38, kNorth):
+	case MakeRoomView(kMars38, kSouth):
+	case MakeRoomView(kMars37, kNorth):
+	case MakeRoomView(kMars37, kSouth):
+	case MakeRoomView(kMars36, kNorth):
+	case MakeRoomView(kMars36, kSouth):
+		if (g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA83", kArthurMarsLookAtGears);
 		break;
 	case MakeRoomView(kMars45, kSouth):
 		// Set up maze doors here.
@@ -1322,7 +1763,19 @@ void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
 		if (!GameState.getMarsSeenRobotAtReactor()) {
 			// Preload the looping sound...
 			loadLoopSound2("Sounds/Mars/Robot Loop.aiff", 0, 0, 0);
-			startExtraSequence(kMars48RobotApproaches, kExtraCompletedFlag, kFilterNoInput);
+			if (!_vm->isDVD()) {
+				startExtraSequence(kMars48RobotApproaches, kExtraCompletedFlag, kFilterNoInput);
+			} else {
+				InputDevice.getInput(input, kFilterAllInput);
+				if (JMPPPInput::isEasterEggModifierInput(input)) {
+					if (_vm->getRandomBit())
+						startExtraSequence(kMars48RobotApproaches, kExtraCompletedFlag, kFilterNoInput);
+					else
+						startExtraSequence(kMarsRobotBobSlow, kExtraCompletedFlag, kFilterNoInput);
+				} else {
+					startExtraSequence(kMarsRobotGenoSlow, kExtraCompletedFlag, kFilterNoInput);
+				}
+			}
 		} else if (!GameState.getMarsAvoidedReactorRobot()) {
 			loadLoopSound2("Sounds/Mars/Robot Loop.aiff", 0x100, 0, 0);
 			loopExtraSequence(kMars48RobotLoops);
@@ -1362,10 +1815,14 @@ void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
 			g_shield->setItemState(kShieldNormal);
 		g_energyMonitor->setEnergyDrainRate(kEnergyDrainNormal);
 		_vm->resetEnergyDeathReason();
+		if (GameState.isTakenItemID(kCardBomb) && g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA78", kArthurMarsExitedReactorWithCardBomb);
 		break;
+	case MakeRoomView(kMars52, kEast):
+		if (g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA11", kArthurMarsEnteredReactor);
 	case MakeRoomView(kMars52, kNorth):
 	case MakeRoomView(kMars52, kSouth):
-	case MakeRoomView(kMars52, kEast):
 	case MakeRoomView(kMars52, kWest):
 	case MakeRoomView(kMars54, kNorth):
 	case MakeRoomView(kMars54, kSouth):
@@ -1407,6 +1864,10 @@ void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
 	case MakeRoomView(kMarsMaze007, kNorth):
 		launchMaze007Robot();
 		break;
+	case MakeRoomView(kMarsMaze009, kWest):
+		if (g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA20", kArthurMarsMazeReachedJunction);
+		break;
 	case MakeRoomView(kMarsMaze015, kSouth):
 		launchMaze015Robot();
 		break;
@@ -1428,6 +1889,18 @@ void Mars::arriveAt(const RoomID room, const DirectionConstant direction) {
 	case MakeRoomView(kMarsMaze199, kSouth):
 		GameState.setScoringThreadedMaze();
 		GameState.setMarsThreadedMaze(true);
+		break;
+	case MakeRoomView(kMarsMaze199, kWest):
+		if (g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA77", kArthurMarsFoundBuckets);
+		break;
+	case MakeRoomView(kMarsMaze200, kWest):
+		if (g_arthurChip) {
+			if (_vm->getRandomBit())
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA10", kArthurMarsApproachedBuckets);
+			else
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA76", kArthurMarsApproachedBuckets);
+		}
 		break;
 	case MakeRoomView(kMarsDeathRoom, kNorth):
 	case MakeRoomView(kMarsDeathRoom, kSouth):
@@ -1456,6 +1929,8 @@ void Mars::shieldOff() {
 }
 
 void Mars::turnTo(const DirectionConstant direction) {
+	Input input;
+
 	switch (MakeRoomView(GameState.getCurrentRoom(), direction)) {
 	case MakeRoomView(kMars27, kNorth):
 	case MakeRoomView(kMars27, kSouth):
@@ -1481,6 +1956,8 @@ void Mars::turnTo(const DirectionConstant direction) {
 	case MakeRoomView(kMars11, kSouth):
 	case MakeRoomView(kMars12, kSouth):
 		setCurrentActivation(kActivationReadyForKiosk);
+		if (g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA33", kArthurMarsReadyForKiosk);		
 		break;
 	case MakeRoomView(kMars18, kNorth):
 		if (GameState.getMarsPodAtUpperPlatform())
@@ -1491,6 +1968,11 @@ void Mars::turnTo(const DirectionConstant direction) {
 			playSpotSoundSync(kMarsCheckInRequiredIn, kMarsCheckInRequiredOut);
 			GameState.setMarsHeardCheckInMessage(true);
 		}
+		break;
+	case MakeRoomView(kMars41, kEast):
+	case MakeRoomView(kMars42, kEast):
+		if (g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA73", kArthurMarsFoundNoShuttlePresent);
 		break;
 	case MakeRoomView(kMars34, kSouth):
 	case MakeRoomView(kMars45, kNorth):
@@ -1517,6 +1999,21 @@ void Mars::turnTo(const DirectionConstant direction) {
 		if (GameState.getMarsThreadedMaze())
 			GameState.setScoringThreadedGearRoom();
 		break;
+	case MakeRoomView(kMars39, kNorth):
+	case MakeRoomView(kMars39, kSouth):
+	case MakeRoomView(kMars38, kNorth):
+	case MakeRoomView(kMars38, kSouth):
+	case MakeRoomView(kMars37, kNorth):
+	case MakeRoomView(kMars37, kSouth):
+	case MakeRoomView(kMars36, kNorth):
+	case MakeRoomView(kMars36, kSouth):
+		if (g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA83", kArthurMarsLookAtGears);
+		break;
+	case MakeRoomView(kMars46, kWest):
+		if (GameState.getMarsPodAtUpperPlatform() && g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA82", kArthurMarsLookAtEmptyTracks);
+		break;
 	case MakeRoomView(kMars48, kNorth):
 		if (GameState.getMarsSeenRobotAtReactor() && !GameState.getMarsAvoidedReactorRobot())
 			die(kDeathDidntGetOutOfWay);
@@ -1525,7 +2022,19 @@ void Mars::turnTo(const DirectionConstant direction) {
 		if (!GameState.getMarsSeenRobotAtReactor()) {
 			// Preload the looping sound...
 			loadLoopSound2("Sounds/Mars/Robot Loop.aiff", 0, 0, 0);
-			startExtraSequence(kMars48RobotApproaches, kExtraCompletedFlag, kFilterNoInput);
+			if (!_vm->isDVD()) {
+				startExtraSequence(kMars48RobotApproaches, kExtraCompletedFlag, kFilterNoInput);
+			} else {
+				InputDevice.getInput(input, kFilterAllInput);
+				if (JMPPPInput::isEasterEggModifierInput(input)) {
+					if (_vm->getRandomBit())
+						startExtraSequence(kMars48RobotApproaches, kExtraCompletedFlag, kFilterNoInput);
+					else
+						startExtraSequence(kMarsRobotBobSlow, kExtraCompletedFlag, kFilterNoInput);
+				} else {
+					startExtraSequence(kMarsRobotGenoSlow, kExtraCompletedFlag, kFilterNoInput);
+				}
+			}
 		} else if (!GameState.getMarsAvoidedReactorRobot()) {
 			loopExtraSequence(kMars48RobotLoops);
 		} else if (GameState.isTakenItemID(kAirMask)) {
@@ -1541,12 +2050,19 @@ void Mars::turnTo(const DirectionConstant direction) {
 			setCurrentAlternate(kAltMarsTookMask);
 		else
 			setCurrentAlternate(kAltMarsNormal);
+		if (GameState.isTakenItemID(kCardBomb) && g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA78", kArthurMarsExitedReactorWithCardBomb);
 		break;
 	case MakeRoomView(kMars49, kSouth):
 		if (GameState.isTakenItemID(kAirMask))
 			setCurrentActivation(kActivateHotSpotAlways);
 		else
 			setCurrentActivation(kActivateMaskOnHolder);
+		break;
+	case MakeRoomView(kMars51, kWest):
+	case MakeRoomView(kMars50, kWest):
+		if (GameState.isTakenItemID(kCardBomb) && g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA78", kArthurMarsExitedReactorWithCardBomb);
 		break;
 	case MakeRoomView(kMars52, kNorth):
 	case MakeRoomView(kMars52, kSouth):
@@ -1586,6 +2102,23 @@ void Mars::turnTo(const DirectionConstant direction) {
 		break;
 	case MakeRoomView(kMarsMaze184, kWest):
 		launchMaze184Robot();
+		break;
+	case MakeRoomView(kMarsMaze199, kNorth):
+	case MakeRoomView(kMarsMaze199, kSouth):
+	case MakeRoomView(kMarsMaze199, kEast):
+	case MakeRoomView(kMarsMaze199, kWest):
+		if (_vm->isDVD())
+			loadAmbientLoops();
+		if (GameState.getCurrentDirection() == kWest && g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA77", kArthurMarsFoundBuckets);
+		break;
+	case MakeRoomView(kMarsMaze200, kWest):
+		if (g_arthurChip) {
+			if (_vm->getRandomBit())
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA10", kArthurMarsApproachedBuckets);
+			else
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA76", kArthurMarsApproachedBuckets);
+		}
 		break;
 	}
 }
@@ -1891,7 +2424,8 @@ void Mars::pickedUpItem(Item *item) {
 	case kAirMask:
 		setCurrentActivation(kActivateHotSpotAlways);
 		if (!GameState.getScoringGotOxygenMask()) {
-			g_AIArea->playAIMovie(kRightAreaSignature, "Images/AI/Mars/XM48SB", false, kWarningInterruption);
+			if (_vm->isChattyAI())
+				g_AIArea->playAIMovie(kRightAreaSignature, "Images/AI/Mars/XM48SB", false, kWarningInterruption);
 			GameState.setScoringGotOxygenMask();
 		}
 		break;
@@ -1954,13 +2488,25 @@ void Mars::dropItemIntoRoom(Item *item, Hotspot *dropSpot) {
 		switch (item->getObjectID()) {
 		case kMarsCard:
 			Neighborhood::dropItemIntoRoom(item, dropSpot);
-			if (dropSpot && dropSpot->getObjectID() == kMars34NorthCardDropSpotID)
-				startExtraSequence(kMarsTurnOnPod, kExtraCompletedFlag, kFilterNoInput);
+			if (dropSpot && dropSpot->getObjectID() == kMars34NorthCardDropSpotID) {
+				if (_vm->isDVD()) {
+					if (!GameState.getWalkthroughMode())
+						startExtraSequence(kMarsTurnOnSteerPod, kExtraCompletedFlag, kFilterNoInput);
+					else
+						startExtraSequence(kMarsTurnOnPod, kExtraCompletedFlag, kFilterNoInput);
+					startMarsTimer(kPodCautionDisplayedTime, kMovieTicksPerSecond, kMarsPodCautionDisplayed);
+				} else {
+					startExtraSequence(kMarsTurnOnPod, kExtraCompletedFlag, kFilterNoInput);
+				}
+			}
 			break;
 		case kNitrogenCanister:
 			Neighborhood::dropItemIntoRoom(item, dropSpot);
-			if (dropSpot && dropSpot->getObjectID() == kMars57DropNitrogenSpotID)
+			if (dropSpot && dropSpot->getObjectID() == kMars57DropNitrogenSpotID) {
 				startExtraSequence(kMars57FreezeLock, kExtraCompletedFlag, kFilterNoInput);
+				if (g_arthurChip)
+					g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA19", kArthurMarsUsedLiquidNitrogen);
+			}
 			break;
 		case kCrowbar:
 			_utilityFuse.stopFuse();
@@ -2088,6 +2634,73 @@ void Mars::turnRight() {
 	}
 }
 
+void Mars::startExtraSequence(const ExtraID extraID, const NotificationFlags flags, const InputBits interruptionFilter) {
+	TimeValue segmentStart = 0, segmentStop = 0;
+	bool loopSequence = false;
+	Common::Rect pushBounds;
+	NotificationFlags extraFlags;
+
+	switch (extraID) {
+	case kMarsTurnOnSteerPod:
+	case kMarsRobotBobSlow:
+	case kMarsRobotGenoSlow:
+		_turnPush.getBounds(pushBounds);
+		
+		switch (extraID) {
+		case kMarsTurnOnSteerPod:
+			_extraMovie.initFromMovieFile("Images/Mars/M45OMK.movie");
+			break;
+		case kMarsRobotBobSlow:
+			_extraMovie.initFromMovieFile("Images/Mars/M48RSB.movie");
+			break;
+		case kMarsRobotGenoSlow:
+			_extraMovie.initFromMovieFile("Images/Mars/M48RSA.movie");
+			break;
+		default:
+			break;
+		}
+		segmentStart = 0;
+		segmentStop = _extraMovie.getDuration();
+		loopSequence = false;
+		
+		_lastExtra = extraID;
+		_turnPush.hide();
+		
+		if (!loopSequence && g_AIArea)
+			g_AIArea->lockAIOut();
+		
+		extraFlags = flags;
+		_interruptionFilter = interruptionFilter;
+		// Stop the nav movie before doing anything else
+		_navMovie.stop();
+		_navMovie.stopDisplaying();
+		
+		_extraMovie.setVolume(_vm->getSoundFXLevel());
+		_extraMovie.moveElementTo(pushBounds.left, pushBounds.top);
+		_extraMovie.setDisplayOrder(kNavMovieOrder + 1);
+		_extraMovie.startDisplaying();
+		_extraMovie.show();
+		_extraMovie.setFlags(0);
+		_extraMovie.setSegment(segmentStart, segmentStop);
+		_extraMovie.setTime(segmentStart);
+		if (loopSequence)
+			_extraMovie.setFlags(kLoopTimeBase);
+		else
+			extraFlags |= kNeighborhoodMovieCompletedFlag;
+		_extraMovieCallBack.cancelCallBack();
+		_extraMovieCallBack.initCallBack(&_extraMovie, kCallBackAtExtremes);
+		if (extraFlags != 0) {
+			_extraMovieCallBack.setCallBackFlag(extraFlags);
+			_extraMovieCallBack.scheduleCallBack(kTriggerAtStop, 0, 0);
+		}
+		_extraMovie.start();
+		break;
+	default:
+		Neighborhood::startExtraSequence(extraID, flags, interruptionFilter);
+		break;
+	}
+}
+
 void Mars::receiveNotification(Notification *notification, const NotificationFlags flag) {
 	InventoryItem *item;
 
@@ -2113,6 +2726,8 @@ void Mars::receiveNotification(Notification *notification, const NotificationFla
 											kMarsPodDepartedUpperPlatformOut);
 				GameState.setMarsHeardUpperPodMessage(true);
 			}
+			if (g_airMask && g_airMask->getAirLeft() > 0 && g_arthurChip)
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA74", kArthurMarsRobotThrownPlayerWithMask);
 			break;
 		case kMarsInfoKioskIntro:
 			GameState.setScoringSawMarsKiosk();
@@ -2144,12 +2759,15 @@ void Mars::receiveNotification(Notification *notification, const NotificationFla
 			}
 			break;
 		case kMarsTurnOnPod:
-			item = (InventoryItem *)_vm->getAllItems().findItemByID(kMarsCard);
-			_vm->addItemToInventory(item);
-			GameState.setScoringTurnedOnTransport();
-			loadLoopSound1("");
-			loadLoopSound2("");
-			startExtraSequence(kMarsTakePodToMars45, kExtraCompletedFlag, kFilterNoInput);
+			if (!_vm->isDVD()) {
+				item = (InventoryItem *)_vm->getAllItems().findItemByID(kMarsCard);
+				_vm->addItemToInventory(item);
+				GameState.setScoringTurnedOnTransport();
+				loadLoopSound1("");
+				loadLoopSound2("");
+			}
+			if (!_vm->isDVD() || GameState.getWalkthroughMode())
+				startExtraSequence(kMarsTakePodToMars45, kExtraCompletedFlag, kFilterNoInput);
 			break;
 		case kMarsTakePodToMars45:
 			arriveAt(kMars45, kSouth);
@@ -2172,6 +2790,12 @@ void Mars::receiveNotification(Notification *notification, const NotificationFla
 			checkAirMask();
 			loadAmbientLoops();
 			break;
+		case kMarsRobotBobSlow:
+		case kMarsRobotGenoSlow:
+			_extraMovie.stopDisplaying();
+			_extraMovie.releaseMovie();
+			_navMovie.startDisplaying();
+			// Fall through...
 		case kMars48RobotApproaches:
 			loadLoopSound2("Sounds/Mars/Robot Loop.aiff", 0x100, 0, 0);
 			GameState.setMarsSeenRobotAtReactor(true);
@@ -2199,6 +2823,12 @@ void Mars::receiveNotification(Notification *notification, const NotificationFla
 			setCurrentActivation(kActivateMaskOnFiller);
 			setCurrentAlternate(kAltMarsMaskOnFiller);
 			GameState.setMarsMaskOnFiller(true);
+			if (g_arthurChip) {
+				if (_vm->getRandomBit())
+					g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA13", kArthurMarsCantFillMask);
+				else
+					g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA80", kArthurMarsCantFillMask);
+			}
 			break;
 		case kMars58SpinLeft:
 		case kMars54SpinRight:
@@ -2247,6 +2877,14 @@ void Mars::receiveNotification(Notification *notification, const NotificationFla
 			setCurrentActivation(kActivateReactorAskLowerScreen);
 			break;
 		case kMars57LowerScreenClosed:
+			item = (InventoryItem *)_vm->getAllItems().findItemByID(kNitrogenCanister);
+			if (g_arthurChip) {
+				if (item->getItemState() == kNitrogenFull)
+					g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA12", kArthurMarsSawLockedPanel);
+				else
+					g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA39", kArthurMarsSawLockedPanelNoNitrogen);
+			}
+			// Fall through...
 		case kMars57ThawLock:
 			setCurrentActivation(kActivateReactorReadyForNitrogen);
 			GameState.setMarsLockFrozen(false);
@@ -2283,6 +2921,12 @@ void Mars::receiveNotification(Notification *notification, const NotificationFla
 		case kMars57RunDiagnostics:
 			setCurrentActivation(kActivateReactorRanDiagnostics);
 			GameState.setScoringFoundCardBomb();
+			if (g_arthurChip) {
+				if (_vm->getRandomBit())
+					g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA73", kArthurMarsFoundCardBomb);
+				else
+					g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBB34", kArthurMarsFoundCardBomb);
+			}
 			break;
 		case kMars57BombExplodes:
 		case kMars57BombExplodesInGame:
@@ -2310,11 +2954,16 @@ void Mars::receiveNotification(Notification *notification, const NotificationFla
 		case kMars57ExposeBomb:
 			setCurrentActivation(kActivateReactorBombExposed);
 			_privateFlags.setFlag(kMarsPrivateBombExposedFlag, true);
+			if (g_arthurChip)
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA75", kArthurMarsDeactivatedCardBomb);
 			break;
 		case kMars57BackToNormal:
 			setCurrentActivation(kActivateReactorPlatformIn);
 			_privateFlags.setFlag(kMarsPrivateBombExposedFlag, false);
-			g_AIArea->playAIMovie(kRightAreaSignature, "Images/AI/Mars/XM51SW", false, kWarningInterruption);
+			if (_vm->isChattyAI())
+				g_AIArea->playAIMovie(kRightAreaSignature, "Images/AI/Mars/XM51SW", false, kWarningInterruption);
+			if (g_arthurChip)
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA02", kArthurMarsSolvedReactorGame);
 			break;
 		case kMars60WestSpinAirlockToEast:
 			GameState.setMarsAirlockOpen(true);
@@ -2336,6 +2985,19 @@ void Mars::receiveNotification(Notification *notification, const NotificationFla
 			break;
 		case kMarsRobotHeadOpen:
 			setCurrentActivation(kActivationRobotHeadOpen);
+			if (g_arthurChip) {
+				switch (_vm->getRandomNumber(2)) {
+				case 0:
+					g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA36", kArthurMarsRobotHeadOpen);
+					break;
+				case 1:
+					g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA37", kArthurMarsRobotHeadOpen);
+					break;
+				case 2:
+					g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA40", kArthurMarsRobotHeadOpen);
+					break;
+				}
+			}
 			break;
 		case kMarsRobotHeadClose:
 			recallToTSASuccess();
@@ -2364,12 +3026,12 @@ void Mars::receiveNotification(Notification *notification, const NotificationFla
 			_rightDamageShuttleMovie.hide();
 			playMovieSegment(&_rightShuttleMovie, kShuttleRightDestroyedStart, kShuttleRightDestroyedStop);
 			playSpotSoundSync(kShuttleDestroyedIn, kShuttleDestroyedOut);
-			throwAwayMarsShuttle();
+			transportOutFromSpaceChase(true);
 			reinstateMonocleInterface();
 			recallToTSASuccess();
 		}
 	} else if ((flag & kTimeToTransportFlag) != 0) {
-		transportToRobotShip();
+		transportOutFromSpaceChase(false);
 	}
 
 	if (g_AIArea)
@@ -2379,11 +3041,42 @@ void Mars::receiveNotification(Notification *notification, const NotificationFla
 void Mars::spotCompleted() {
 	Neighborhood::spotCompleted();
 
-	if (GameState.getCurrentRoom() == kMarsRobotShuttle)
-		g_AIArea->playAIMovie(kRightAreaSignature, "Images/AI/Mars/XN59WD", false, kWarningInterruption);
+	switch (GameState.getCurrentRoomAndView()) {
+	case MakeRoomView(kMars27, kNorth):
+	case MakeRoomView(kMars28, kNorth):
+		if (g_arthurChip) {
+			switch (_vm->getRandomNumber(2)) {
+			case 0:
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA09", kArthurMarsLookedAtGuards);
+				break;
+			case 1:
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA81", kArthurMarsLookedAtGuards);
+				break;
+			case 2:
+				g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBB32", kArthurMarsLookedAtGuards);
+				break;
+			}
+		}
+		break;
+	case MakeRoomView(kMarsRobotShuttle, kEast):
+		if (g_arthurChip)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA79", kArthurMarsFoundDeadRobot);
+		if (_vm->isChattyAI())
+			g_AIArea->playAIMovie(kRightAreaSignature, "Images/AI/Mars/XN59WD", false, kWarningInterruption);
+		break;
+	}
+}
+
+void Mars::startUpFromFinishedTunnelPod() {
+	arriveAt(kMars45, kSouth);
+	if (g_AIArea != NULL)
+		g_AIArea->checkMiddleArea();
 }
 
 void Mars::doCanyonChase() {
+	Input input;
+	FaderMoveSpec spec;
+
 	GameState.setScoringEnteredShuttle();
 	setNextHandler(_vm);
 	throwAwayInterface();
@@ -2394,9 +3087,24 @@ void Mars::doCanyonChase() {
 	_spotSounds.initFromQuickTime(getSoundSpotsName());
 	_spotSounds.setVolume(_vm->getSoundFXLevel());
 
-	Video::VideoDecoder *video = new Video::QuickTimeDecoder();
-	if (!video->loadFile("Images/Mars/M44ESA.movie"))
-		error("Could not load interface->shuttle transition video");
+	Video::VideoDecoder *video = 0;
+
+#ifdef USE_THEORADEC
+	if (_vm->isDVD()) {
+		video = new Video::TheoraDecoder();
+
+		if (!video->loadFile("Images/Mars/M44ESA_hq.ogg")) {
+			delete video;
+			video = 0;
+		}
+	}
+#endif
+
+	if (!video) {
+		video = new Video::QuickTimeDecoder();
+		if (!video->loadFile("Images/Mars/M44ESA.movie"))
+			error("Could not load interface->shuttle transition video");
+	}
 
 	video->start();
 
@@ -2429,11 +3137,18 @@ void Mars::doCanyonChase() {
 	initOnePicture(&_shuttleInterface4, "Images/Mars/MCmain4.pict", kShuttleBackgroundOrder, kShuttle4Left,
 							kShuttle4Top, true);
 
-	initOneMovie(&_canyonChaseMovie, "Images/Mars/Canyon.movie",
+	if (_vm->isDVD())
+		initOneMovie(&_canyonChaseMovie, "Images/Mars/Canyon_hq1.mov",
+						kShuttleMonitorOrder, kShuttleWindowLeft, kShuttleWindowTop, true);
+	else
+		initOneMovie(&_canyonChaseMovie, "Images/Mars/Canyon.movie",
 						kShuttleMonitorOrder, kShuttleWindowLeft, kShuttleWindowTop, true);
 	_canyonChaseMovie.setVolume(_vm->getSoundFXLevel());
 
-	loadLoopSound1("Sounds/Mars/Inside Cockpit.22K.8.AIFF");
+	if (_vm->isDVD())
+		loadLoopSound1("Sounds/Mars/Inside Cockpit.44K.16.AIFF");
+	else
+		loadLoopSound1("Sounds/Mars/Inside Cockpit.22K.8.AIFF");
 
 	// Swing shuttle around...
 	playMovieSegment(&_canyonChaseMovie, kShuttleSwingStart, kShuttleSwingStop);
@@ -2465,6 +3180,12 @@ void Mars::doCanyonChase() {
 	initOneMovie(&_rightDamageShuttleMovie, "Images/Mars/Right Damage Shuttle.movie",
 			kShuttleStatusOrder, kShuttleRightEnergyLeft, kShuttleRightEnergyTop, false);
 
+	if (_vm->isDVD()) {
+		_musicLoop.attachFader(&_musicFader);
+		_musicLoop.initFromAIFFFile("Sounds/Mars/Canyon Loop.44K.16.AIFF");
+		_musicFader.setMasterVolume(_vm->getAmbienceLevel());
+	}
+
 	_centerShuttleMovie.show();
 	_centerShuttleMovie.setTime(kShuttleCenterBoardingTime);
 	playSpotSoundSync(kShuttleCockpitIn, kShuttleCockpitOut);
@@ -2476,6 +3197,7 @@ void Mars::doCanyonChase() {
 	_shuttleEnergyMeter.initShuttleEnergyMeter();
 	_shuttleEnergyMeter.powerUpMeter();
 	while (_shuttleEnergyMeter.isFading()) {
+		InputDevice.pumpEvents();
 		_vm->checkCallBacks();
 		_vm->refreshDisplay();
 		g_system->updateScreen();
@@ -2538,10 +3260,39 @@ void Mars::doCanyonChase() {
 
 	loadLoopSound1("");
 
-	_canyonChaseMovie.setSegment(kCanyonChaseStart, kCanyonChaseStop);
-	_canyonChaseMovie.start();
+	if (_vm->isDVD()) {
+		InputDevice.getInput(input, kFilterAllInput);
+		if (JMPPPInput::isEasterEggModifierInput(input)) {
+			GameState.setEasterEgg(true);
+			initOneMovie(&_canyonChaseMovie, "Images/Mars/Canyon_hqG.mov",
+							kShuttleMonitorOrder, kShuttleWindowLeft, kShuttleWindowTop, true);
+			_canyonChaseMovie.setVolume(_vm->getAmbienceLevel());
+			_canyonChaseMovie.start();
 
-	startMarsTimer(kLaunchTubeReachedTime, kMovieTicksPerSecond, kMarsLaunchTubeReached);
+			startMarsTimer(_canyonChaseMovie.getDuration() - 5 * kMovieTicksPerSecond,
+							kMovieTicksPerSecond, kMarsLaunchTubeReached);
+		} else if (GameState.getWalkthroughMode()) {
+			_canyonChaseMovie.setSegment(kCanyonChaseStart, kCanyonChaseDVDStop);
+			_canyonChaseMovie.start();
+
+			_musicLoop.loopSound();
+			spec.makeTwoKnotFaderSpec(10, 0, 0, 1, 255);
+			_musicFader.startFader(spec);
+
+			startMarsTimer(kCanyonChaseExitedTime, kMovieTicksPerSecond, kMarsCanyonChaseExited);
+		} else {
+			_canyonChaseMovie.stop();
+			_canyonChaseMovie.stopDisplaying();
+			_canyonChaseMovie.releaseMovie();
+
+			newInteraction(kMarsCanyonChaseInteractionID);
+		}
+	} else {
+		_canyonChaseMovie.setSegment(kCanyonChaseStart, kCanyonChaseCDStop);
+		_canyonChaseMovie.start();
+
+		startMarsTimer(kLaunchTubeCDReachedTime, kMovieTicksPerSecond, kMarsLaunchTubeReached);
+	}
 }
 
 void Mars::startUpFromFinishedSpaceChase() {
@@ -2601,12 +3352,13 @@ void Mars::startUpFromFinishedSpaceChase() {
 
 	_lowerLeftShuttleMovie.show();
 
-	loadLoopSound1("Sounds/Mars/Space Ambient.22K.8.AIFF");
+	playSpaceAmbient();
 
 	initOneMovie(&_junk, "Images/Mars/Junk.movie", kShuttleJunkOrder, kShuttleJunkLeft,
 			kShuttleJunkTop, false);
 
 	initOneMovie(&_explosions, "Images/Mars/Explosions.movie", kShuttleWeaponFrontOrder, 0, 0, false);
+	_explosions.setVolume(_vm->getSoundFXLevel());
 	_explosionCallBack.initCallBack(&_explosions, kCallBackAtExtremes);
 
 	_energyBeam.initShuttleWeapon();
@@ -2645,6 +3397,7 @@ void Mars::startUpFromFinishedSpaceChase() {
 
 	initOneMovie(&_canyonChaseMovie, "Images/Mars/M98EAS.movie", kShuttleTractorBeamMovieOrder,
 			kShuttleWindowLeft, kShuttleWindowTop, true);
+	_canyonChaseMovie.setVolume(_vm->getSoundFXLevel());
 	_canyonChaseMovie.setTime(_canyonChaseMovie.getDuration());
 	_canyonChaseMovie.redrawMovieWorld();
 }
@@ -2710,7 +3463,7 @@ void Mars::startUpFromSpaceChase() {
 
 	_lowerLeftShuttleMovie.show();
 
-	loadLoopSound1("Sounds/Mars/Space Ambient.22K.8.AIFF");
+	playSpaceAmbient();
 
 	initOneMovie(&_planetMovie, "Images/Mars/Planet.movie", kShuttlePlanetOrder,
 			kPlanetStartLeft, kPlanetStartTop, true);
@@ -2720,6 +3473,7 @@ void Mars::startUpFromSpaceChase() {
 			kShuttleJunkTop, false);
 
 	initOneMovie(&_explosions, "Images/Mars/Explosions.movie", kShuttleWeaponFrontOrder, 0, 0, false);
+	_explosions.setVolume(_vm->getSoundFXLevel());
 	_explosionCallBack.initCallBack(&_explosions, kCallBackAtExtremes);
 
 	_energyBeam.initShuttleWeapon();
@@ -2783,11 +3537,24 @@ void Mars::startUpFromSpaceChase() {
 void Mars::setSoundFXLevel(const uint16 level) {
 	Neighborhood::setSoundFXLevel(level);
 
-	if (_canyonChaseMovie.isMovieValid())
+	if (_extraMovie.isMovieValid())
+		_extraMovie.setVolume(level);
+	if (GameState.getCurrentRoomAndView() == MakeRoomView(kMars48, kEast) &&
+		!GameState.getMarsAvoidedReactorRobot())
+		_loop2Fader.setMasterVolume(level);
+	if (!GameState.getEasterEgg() && _canyonChaseMovie.isMovieValid())
 		_canyonChaseMovie.setVolume(level);
-
 	if (_explosions.isMovieValid())
 		_explosions.setVolume(level);
+}
+
+void Mars::setAmbienceLevel(const uint16 level) {
+	Neighborhood::setAmbienceLevel(level);
+
+	if (GameState.getEasterEgg() && _canyonChaseMovie.isMovieValid())
+		_canyonChaseMovie.setVolume(level);
+	if (_musicLoop.isSoundLoaded())
+		_musicFader.setMasterVolume(level);
 }
 
 void Mars::startMarsTimer(TimeValue time, TimeScale scale, MarsTimerCode code) {
@@ -2799,36 +3566,72 @@ void Mars::startMarsTimer(TimeValue time, TimeScale scale, MarsTimerCode code) {
 }
 
 void Mars::marsTimerExpired(MarsTimerEvent &event) {
+	InventoryItem *item;
+	FaderMoveSpec spec;
 	Common::Rect r;
 	uint16 x, y;
 
 	switch (event.event) {
+	case kMarsPodCautionDisplayed:
+		item = (InventoryItem *)_vm->getAllItems().findItemByID(kMarsCard);
+		_vm->addItemToInventory(item);
+		startMarsTimer(kPodCautionDismissedTime, kMovieTicksPerSecond, kMarsPodCautionDismissed);
+		return;
+	case kMarsPodCautionDismissed:
+		_extraMovie.stopDisplaying();
+		_extraMovie.releaseMovie();
+		_navMovie.startDisplaying();
+		GameState.setScoringTurnedOnTransport();
+		loadLoopSound1("");
+		loadLoopSound2("");
+		if (!GameState.getWalkthroughMode())
+			newInteraction(kMarsTunnelPodInteractionID);
+		return;
+	// Bail out early for pod events so input is not filtered
+	case kMarsCanyonChaseExited:
+		spec.makeTwoKnotFaderSpec(20, 0, 255, 5, 160);
+		_musicFader.startFader(spec);
+		startMarsTimer(kCanyonChaseFadedTime, kMovieTicksPerSecond, kMarsCanyonChaseFaded);
+		break;
+	case kMarsCanyonChaseFaded:
+		spec.makeTwoKnotFaderSpec(10, 0, 160, 30, 0);
+		_musicFader.startFader(spec);
+		startMarsTimer(kLaunchTubeDVDReachedTime, kMovieTicksPerSecond, kMarsLaunchTubeReached);
+		break;
 	case kMarsLaunchTubeReached:
 		_lowerLeftShuttleMovie.setTime(kShuttleLowerLeftTubeTime);
 		_lowerLeftShuttleMovie.redrawMovieWorld();
-		startMarsTimer(kCanyonChaseFinishedTime, kMovieTicksPerSecond, kMarsCanyonChaseFinished);
+		startMarsTimer(kCanyonChaseCDFinishedTime, kMovieTicksPerSecond, kMarsCanyonChaseFinished);
 		break;
 	case kMarsCanyonChaseFinished:
 		GameState.setScoringEnteredLaunchTube();
+		GameState.setEasterEgg(false);
 
-		while (_canyonChaseMovie.isRunning()) {
-			_vm->checkCallBacks();
-			_vm->refreshDisplay();
-			_vm->_system->delayMillis(10);
+		if (_canyonChaseMovie.isMovieValid()) {
+			while (_canyonChaseMovie.isRunning()) {
+				InputDevice.pumpEvents();
+				_vm->checkCallBacks();
+				_vm->refreshDisplay();
+				_vm->_system->delayMillis(10);
+			}
+
+			_canyonChaseMovie.stop();
+			_canyonChaseMovie.stopDisplaying();
+			_canyonChaseMovie.releaseMovie();
 		}
-
-		_canyonChaseMovie.stop();
-		_canyonChaseMovie.stopDisplaying();
-		_canyonChaseMovie.releaseMovie();
 
 		_vm->_gfx->enableErase();
 
-		loadLoopSound1("Sounds/Mars/Space Ambient.22K.8.AIFF");
+		playSpaceAmbient();
 
-		playSpotSoundSync(kShuttleConfiguringIn, kShuttleConfiguringOut);
-		playSpotSoundSync(kShuttleGeneratingIn, kShuttleGeneratingOut);
-		playSpotSoundSync(kShuttleBreakawayIn, kShuttleBreakawayOut);
-		playSpotSoundSync(kMarsAtmosphericBreakawayIn, kMarsAtmosphericBreakawayOut);
+		if (!_vm->isDVD()) {
+			// Don't play a couple sounds in the DVD version; they were put into
+			// the canyon video.
+			playSpotSoundSync(kShuttleConfiguringIn, kShuttleConfiguringOut);
+			playSpotSoundSync(kShuttleGeneratingIn, kShuttleGeneratingOut);
+			playSpotSoundSync(kShuttleBreakawayIn, kShuttleBreakawayOut);
+			playSpotSoundSync(kMarsAtmosphericBreakawayIn, kMarsAtmosphericBreakawayOut);
+		}
 
 		initOneMovie(&_planetMovie, "Images/Mars/Planet.movie", kShuttlePlanetOrder, kPlanetStartLeft, kPlanetStartTop, true);
 		_planetMovie.setFlags(kLoopTimeBase);
@@ -2836,6 +3639,7 @@ void Mars::marsTimerExpired(MarsTimerEvent &event) {
 		initOneMovie(&_junk, "Images/Mars/Junk.movie", kShuttleJunkOrder, kShuttleJunkLeft, kShuttleJunkTop, false);
 
 		initOneMovie(&_explosions, "Images/Mars/Explosions.movie", kShuttleWeaponFrontOrder, 0, 0, false);
+		_explosions.setVolume(_vm->getSoundFXLevel());
 		_explosionCallBack.initCallBack(&_explosions, kCallBackAtExtremes);
 
 		_energyBeam.initShuttleWeapon();
@@ -2945,6 +3749,7 @@ void Mars::marsTimerExpired(MarsTimerEvent &event) {
 		showBigExplosion(r, kShuttleAlienShipOrder);
 
 		while (_explosions.isRunning()) {
+			InputDevice.pumpEvents();
 			_vm->checkCallBacks();
 			_vm->refreshDisplay();
 			g_system->delayMillis(10);
@@ -3013,13 +3818,44 @@ void Mars::throwAwayMarsShuttle() {
 	loadLoopSound1("");
 }
 
-void Mars::transportToRobotShip() {
+void Mars::playSpaceAmbient() {
+	if (_vm->isDVD())
+		loadLoopSound1("Sounds/Mars/Space Ambient.44K.16.AIFF");
+	else
+		loadLoopSound1("Sounds/Mars/Space Ambient.22K.8.AIFF");
+}
+
+void Mars::transportOutFromSpaceChase(bool destroyedShip) {
 	throwAwayMarsShuttle();
 
-	Video::VideoDecoder *video = new Video::QuickTimeDecoder();
-	if (!video->loadFile("Images/Mars/M98EAE.movie"))
-		error("Could not load shuttle->interface transition video");
+	Video::VideoDecoder *video = 0;
 
+#ifdef USE_THEORADEC
+	if (_vm->isDVD()) {
+		video = new Video::TheoraDecoder();
+
+		if (destroyedShip) {
+			if (!video->loadFile("Images/Mars/M98EAP_hq.ogg")) {
+				delete video;
+				video = 0;
+			}
+		} else if (!video->loadFile("Images/Mars/M98EAE_hq.ogg")) {
+			delete video;
+			video = 0;
+		}
+	}
+#endif
+
+	if (!video) {
+		video = new Video::QuickTimeDecoder();
+		if (destroyedShip && _vm->isDVD()) {
+			if (!video->loadFile("Images/Mars/M98EAP.movie"))
+				error("Could not load shuttle->TSA transition video");
+		} else if (!video->loadFile("Images/Mars/M98EAE.movie"))
+			error("Could not load shuttle->interface transition video");
+	}
+
+	video->setVolume(MIN<uint>(_vm->getSoundFXLevel(), 0xFF));
 	video->start();
 
 	while (!_vm->shouldQuit() && !video->endOfVideo()) {
@@ -3042,18 +3878,20 @@ void Mars::transportToRobotShip() {
 	if (_vm->shouldQuit())
 		return;
 
-	reinstateMonocleInterface();
+	if (!destroyedShip) {
+		reinstateMonocleInterface();
 
-	g_energyMonitor->stopEnergyDraining();
-	g_energyMonitor->restoreLastEnergyValue();
-	_vm->resetEnergyDeathReason();
-	g_energyMonitor->startEnergyDraining();
+		g_energyMonitor->stopEnergyDraining();
+		g_energyMonitor->restoreLastEnergyValue();
+		_vm->resetEnergyDeathReason();
+		g_energyMonitor->startEnergyDraining();
 
-	arriveAt(kMarsRobotShuttle, kEast);
+		arriveAt(kMarsRobotShuttle, kEast);
 
-	_navMovie.stop();
-	_navMovie.setTime(_navMovie.getStart());
-	_navMovie.start();
+		_navMovie.stop();
+		_navMovie.setTime(_navMovie.getStart());
+		_navMovie.start();
+	}
 }
 
 const int kRobotTooStrong = 1;
@@ -3138,6 +3976,7 @@ void Mars::spaceChaseClick(const Input &input, const HotSpotID id) {
 				_shuttleEnergyMeter.drainForTractorBeam();
 
 				while (_shuttleEnergyMeter.isFading()) {
+					InputDevice.pumpEvents();
 					_vm->checkCallBacks();
 					_vm->refreshDisplay();
 					_vm->_system->delayMillis(10);
@@ -3167,11 +4006,13 @@ void Mars::spaceChaseClick(const Input &input, const HotSpotID id) {
 					// Shameless reuse of a variable :P
 					initOneMovie(&_canyonChaseMovie, "Images/Mars/M98EAS.movie", kShuttleTractorBeamMovieOrder,
 							kShuttleWindowLeft, kShuttleWindowTop, true);
+					_canyonChaseMovie.setVolume(_vm->getSoundFXLevel());
 					_canyonChaseMovie.redrawMovieWorld();
 					playMovieSegment(&_canyonChaseMovie, 0, _canyonChaseMovie.getDuration());
 
 					// wait here until any junk clears...
 					while (_junk.junkFlying()) {
+						InputDevice.pumpEvents();
 						_vm->checkCallBacks();
 						_vm->refreshDisplay();
 						_vm->_system->delayMillis(10);

@@ -68,6 +68,8 @@ public:
 	bool canSolve();
 	void doSolve();
 
+	void setSoundFXLevel(const uint16);
+
 	void doorOpened();
 
 protected:
@@ -88,8 +90,10 @@ protected:
 	virtual void arriveAt(const RoomID, const DirectionConstant);
 	void arriveAtNorad68West();
 	void arriveAtNorad79West();
+	void turnTo(const DirectionConstant);
 	TimeValue getViewTime(const RoomID, const DirectionConstant);
 	void openDoor();
+	void cantMoveThatWay(CanMoveForwardReason);
 	void activateHotspots();
 	void clickInHotspot(const Input &, const Hotspot *);
 	void receiveNotification(Notification *, const NotificationFlags);

@@ -43,9 +43,9 @@
 
 
 #ifdef MACOSX
-#define DEFAULT_SAVE_PATH "Documents/ScummVM Savegames"
+#define DEFAULT_SAVE_PATH "Library/Application Support/Pegasus Prime Saves"
 #else
-#define DEFAULT_SAVE_PATH ".scummvm"
+#define DEFAULT_SAVE_PATH ".PegasusPrime"
 #endif
 
 POSIXSaveFileManager::POSIXSaveFileManager() {

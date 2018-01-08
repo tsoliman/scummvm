@@ -107,7 +107,7 @@ Common::WriteStream *OSystem_POSIX::createLogFile() {
 #ifdef MACOSX
 	logFile += "/Library";
 #else
-	logFile += "/.scummvm";
+	logFile += "/.PegasusPrime";
 #endif
 #ifdef SAMSUNGTV
 	logFile = "/mtd_ram";
@@ -151,7 +151,7 @@ Common::WriteStream *OSystem_POSIX::createLogFile() {
 		return 0;
 	}
 
-	logFile += "/scummvm.log";
+	logFile += "/Pegasus Prime.log";
 
 	Common::FSNode file(logFile);
 	Common::WriteStream *stream = file.createWriteStream();

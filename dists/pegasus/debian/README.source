@@ -1,0 +1,10 @@
+This project uses a custom build of ScummVM licensed under GNU GPLv2 using
+revision d04667e58a889e4744f36fb5797a69fa437a1abf. You may obtain the sources
+from GitHub: https://github.com/scummvm/scummvm (direct link:
+https://github.com/scummvm/scummvm/archive/d04667e58a889e4744f36fb5797a69fa437a1abf.zip).
+On top of that revision, it has been patched with the "full_patch.diff"
+(included in the pegasusprime source tarball) The dists/pegasus directory
+missing from the patch is also included in the pegasusprime source tarball.
+
+This is a cutdown ScummVM build because Pegasus Prime does not need many of the
+usual features of ScummVM.

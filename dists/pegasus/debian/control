@@ -1,0 +1,17 @@
+Source: pegasusprime
+Section: games
+Priority: optional
+Maintainer: Keith Kaisershot <archives@thejourneymanproject.com>
+Build-Depends: debhelper (>= 7.0.50~), autotools-dev
+Standards-Version: 3.8.4
+Homepage: http://www.thejourneymanproject.com
+
+Package: pegasusprime
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: time travel adventure game
+ Experience the origin of the Journeyman Project series in this "director's
+ cut" remake of the award-winning time travel adventure game with greatly
+ enhanced animation and sound. As Agent 5 of the Temporal Protectorate, you
+ must explore across centuries for clues to a sinister mystery as Earth's
+ future hangs in the balance.

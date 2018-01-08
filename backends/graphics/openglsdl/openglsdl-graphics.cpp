@@ -296,10 +296,6 @@ bool OpenGLSdlGraphicsManager::setupMode(uint width, uint height) {
 			}
 		}
 
-		// Remember our choice.
-		ConfMan.setInt("last_fullscreen_mode_width", _desiredFullscreenWidth, Common::ConfigManager::kApplicationDomain);
-		ConfMan.setInt("last_fullscreen_mode_height", _desiredFullscreenHeight, Common::ConfigManager::kApplicationDomain);
-
 		// Use our choice.
 		width  = _desiredFullscreenWidth;
 		height = _desiredFullscreenHeight;

@@ -118,6 +118,7 @@ static const ItemID kArgonPickup = 24;
 // Biochips.
 
 static const ItemID kAIBiochip = 0;
+static const ItemID kArthurBiochip = 1;
 static const ItemID kInterfaceBiochip = 1;
 static const ItemID kMapBiochip = 2;
 static const ItemID kOpticalBiochip = 3;
@@ -248,6 +249,14 @@ static const ItemState kFlashlightOn = 115;
 static const ItemState kNitrogenEmpty = 116;
 static const ItemState kNitrogenFull = 117;
 static const ItemState kFullGlass = 118;
+static const ItemState kArthur000 = 119;
+static const ItemState kArthur002 = 120;
+static const ItemState kArthur010 = 121;
+static const ItemState kArthur012 = 122;
+static const ItemState kArthur100 = 123;
+static const ItemState kArthur102 = 124;
+static const ItemState kArthur110 = 125;
+static const ItemState kArthur112 = 126;
 
 // Extra IDs.
 
@@ -339,6 +348,9 @@ public:
 
 	void findItemExtra(const uint32 extraID, ItemExtraEntry &entry);
 
+	// Reset to its original state at the beginning of the game
+	void reset();
+
 protected:
 	NeighborhoodID _itemNeighborhood;
 	RoomID	_itemRoom;
@@ -346,6 +358,10 @@ protected:
 	ActorID _itemOwnerID;
 	WeightType _itemWeight;
 	ItemState _itemState;
+
+	NeighborhoodID _originalNeighborhood;
+	RoomID _originalRoom;
+	DirectionConstant _originalDirection;
 
 	JMPItemInfo _itemInfo;
 	ItemStateInfo _sharedAreaInfo;

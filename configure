@@ -159,7 +159,7 @@ _plugin_prefix=
 _plugin_suffix=
 _nasm=auto
 _optimization_level=
-_default_optimization_level=-O2
+_default_optimization_level=-Os
 # Default commands
 _ranlib=ranlib
 _strip=strip

@@ -9,59 +9,72 @@ install:
 	$(INSTALL) -d "$(DESTDIR)$(bindir)"
 	$(INSTALL) -c -m 755 "./$(EXECUTABLE)" "$(DESTDIR)$(bindir)/$(EXECUTABLE)"
 	$(INSTALL) -d "$(DESTDIR)$(mandir)/man6/"
-	$(INSTALL) -c -m 644 "$(srcdir)/dists/scummvm.6" "$(DESTDIR)$(mandir)/man6/scummvm.6"
+	$(INSTALL) -c -m 644 "$(srcdir)/dists/scummvm.6" "$(DESTDIR)$(mandir)/man6/PegasusPrime.6"
+	$(INSTALL) -d "$(DESTDIR)$(datarootdir)/icons/"
+	$(INSTALL) -c -m 644 "$(srcdir)/dists/pegasus/pegasus.xpm" "$(DESTDIR)$(datarootdir)/icons/pegasus.xpm"
 	$(INSTALL) -d "$(DESTDIR)$(datarootdir)/pixmaps/"
-	$(INSTALL) -c -m 644 "$(srcdir)/icons/scummvm.xpm" "$(DESTDIR)$(datarootdir)/pixmaps/scummvm.xpm"
+	$(INSTALL) -c -m 644 "$(srcdir)/dists/pegasus/pegasus.xpm" "$(DESTDIR)$(datarootdir)/pixmaps/pegasus.xpm"
 	$(INSTALL) -d "$(DESTDIR)$(docdir)"
 	$(INSTALL) -c -m 644 $(DIST_FILES_DOCS) "$(DESTDIR)$(docdir)"
 	$(INSTALL) -d "$(DESTDIR)$(datadir)"
-	$(INSTALL) -c -m 644 $(DIST_FILES_THEMES) $(DIST_FILES_ENGINEDATA) "$(DESTDIR)$(datadir)/"
+	$(INSTALL) -c -m 644 $(srcdir)/gui/themes/translations.dat "$(DESTDIR)$(datadir)/"
+	$(INSTALL) -c -m 644 $(srcdir)/dists/pegasus/scummpegasus.zip "$(DESTDIR)$(datadir)/"
 ifdef DYNAMIC_MODULES
-	$(INSTALL) -d "$(DESTDIR)$(libdir)/scummvm/"
-	$(INSTALL) -c -m 644 $(PLUGINS) "$(DESTDIR)$(libdir)/scummvm/"
+	$(INSTALL) -d "$(DESTDIR)$(libdir)/PegasusPrime/"
+	$(INSTALL) -c -m 644 $(PLUGINS) "$(DESTDIR)$(libdir)/PegasusPrime/"
 endif
+	$(INSTALL) -d "$(DESTDIR)$(datarootdir)/applications/"
+	$(INSTALL) -c -m 644 $(srcdir)/dists/pegasus/PegasusPrime.desktop "$(DESTDIR)$(datarootdir)/applications/"
 
 install-strip:
 	$(INSTALL) -d "$(DESTDIR)$(bindir)"
 	$(INSTALL) -c -s -m 755 "./$(EXECUTABLE)" "$(DESTDIR)$(bindir)/$(EXECUTABLE)"
 	$(INSTALL) -d "$(DESTDIR)$(mandir)/man6/"
-	$(INSTALL) -c -m 644 "$(srcdir)/dists/scummvm.6" "$(DESTDIR)$(mandir)/man6/scummvm.6"
+	$(INSTALL) -c -m 644 "$(srcdir)/dists/scummvm.6" "$(DESTDIR)$(mandir)/man6/PegasusPrime.6"
+	$(INSTALL) -d "$(DESTDIR)$(datarootdir)/icons/"
+	$(INSTALL) -c -m 644 "$(srcdir)/dists/pegasus/pegasus.xpm" "$(DESTDIR)$(datarootdir)/icons/pegasus.xpm"
 	$(INSTALL) -d "$(DESTDIR)$(datarootdir)/pixmaps/"
-	$(INSTALL) -c -m 644 "$(srcdir)/icons/scummvm.xpm" "$(DESTDIR)$(datarootdir)/pixmaps/scummvm.xpm"
+	$(INSTALL) -c -m 644 "$(srcdir)/dists/pegasus/pegasus.xpm" "$(DESTDIR)$(datarootdir)/pixmaps/pegasus.xpm"
 	$(INSTALL) -d "$(DESTDIR)$(docdir)"
 	$(INSTALL) -c -m 644 $(DIST_FILES_DOCS) "$(DESTDIR)$(docdir)"
 	$(INSTALL) -d "$(DESTDIR)$(datadir)"
-	$(INSTALL) -c -m 644 $(DIST_FILES_THEMES) $(DIST_FILES_ENGINEDATA) "$(DESTDIR)$(datadir)/"
+	$(INSTALL) -c -m 644 $(srcdir)/gui/themes/translations.dat "$(DESTDIR)$(datadir)/"
+	$(INSTALL) -c -m 644 $(srcdir)/dists/pegasus/scummpegasus.zip "$(DESTDIR)$(datadir)/"
 ifdef DYNAMIC_MODULES
-	$(INSTALL) -d "$(DESTDIR)$(libdir)/scummvm/"
-	$(INSTALL) -c -s -m 644 $(PLUGINS) "$(DESTDIR)$(libdir)/scummvm/"
+	$(INSTALL) -d "$(DESTDIR)$(libdir)/PegasusPrime/"
+	$(INSTALL) -c -s -m 644 $(PLUGINS) "$(DESTDIR)$(libdir)/PegasusPrime/"
 endif
+	$(INSTALL) -d "$(DESTDIR)$(datarootdir)/applications/"
+	$(INSTALL) -c -m 644 $(srcdir)/dists/pegasus/PegasusPrime.desktop "$(DESTDIR)$(datarootdir)/applications/"
 
 uninstall:
 	rm -f "$(DESTDIR)$(bindir)/$(EXECUTABLE)"
-	rm -f "$(DESTDIR)$(mandir)/man6/scummvm.6"
-	rm -f "$(DESTDIR)$(datarootdir)/pixmaps/scummvm.xpm"
+	rm -f "$(DESTDIR)$(mandir)/man6/PegasusPrime.6"
+	rm -f "$(DESTDIR)$(datarootdir)/icons/pegasus.xpm"
+	rm -f "$(DESTDIR)$(datarootdir)/pixmaps/pegasus.xpm"
 	rm -rf "$(DESTDIR)$(docdir)"
 	rm -rf "$(DESTDIR)$(datadir)"
 ifdef DYNAMIC_MODULES
-	rm -rf "$(DESTDIR)$(libdir)/scummvm/"
+	rm -rf "$(DESTDIR)$(libdir)/PegasusPrime/"
 endif
+	rm -f "$(DESTDIR)$(datarootdir)/applications/PegasusPrime.desktop"
 
 # Special target to create a application wrapper for Mac OS X
-bundle_name = ScummVM.app
+bundle_name = "Pegasus Prime™ OSX.app"
 bundle: scummvm-static
 	mkdir -p $(bundle_name)/Contents/MacOS
 	mkdir -p $(bundle_name)/Contents/Resources
 	echo "APPL????" > $(bundle_name)/Contents/PkgInfo
-	cp $(srcdir)/dists/macosx/Info.plist $(bundle_name)/Contents/
+	cp $(srcdir)/dists/pegasus/Info.plist $(bundle_name)/Contents/
 ifdef USE_SPARKLE
 	mkdir -p $(bundle_name)/Contents/Frameworks
 	cp $(srcdir)/dists/macosx/dsa_pub.pem $(bundle_name)/Contents/Resources/
 	cp -R $(STATICLIBPATH)/Sparkle.framework $(bundle_name)/Contents/Frameworks/
 endif
-	cp $(srcdir)/icons/scummvm.icns $(bundle_name)/Contents/Resources/
+	cp $(srcdir)/dists/pegasus/pegasus.icns $(bundle_name)/Contents/Resources/
 	cp $(DIST_FILES_DOCS) $(bundle_name)/
-	cp $(DIST_FILES_THEMES) $(bundle_name)/Contents/Resources/
+	cp $(srcdir)/gui/themes/translations.dat $(bundle_name)/Contents/Resources/
+	cp $(srcdir)/dists/pegasus/scummpegasus.zip $(bundle_name)/Contents/Resources/
 ifdef DIST_FILES_ENGINEDATA
 	cp $(DIST_FILES_ENGINEDATA) $(bundle_name)/Contents/Resources/
 endif
@@ -235,7 +248,7 @@ osxsnap: bundle
 # Windows specific
 #
 
-scummvmwinres.o: $(srcdir)/icons/scummvm.ico $(DIST_FILES_THEMES) $(DIST_FILES_ENGINEDATA) $(srcdir)/dists/scummvm.rc
+scummvmwinres.o: $(srcdir)/dists/pegasus/pegasus.ico $(srcdir)/dists/pegasus/scummpegasus.zip $(DIST_FILES_THEMES) $(DIST_FILES_ENGINEDATA) $(srcdir)/dists/scummvm.rc
 	$(QUIET_WINDRES)$(WINDRES) -DHAVE_CONFIG_H $(WINDRESFLAGS) $(DEFINES) -I. -I$(srcdir) $(srcdir)/dists/scummvm.rc scummvmwinres.o
 
 # Special target to create a win32 snapshot binary (for Inno Setup)

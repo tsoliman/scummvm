@@ -63,6 +63,8 @@ protected:
 	void useIdleTime();
 	void loopExtra(const ExtraID);
 
+	void playSound(const Common::String &baseFileName);
+
 	Movie _4DSpritesMovie;
 	TimeScale _4DSpritesScale;
 	uint _whichMenu;

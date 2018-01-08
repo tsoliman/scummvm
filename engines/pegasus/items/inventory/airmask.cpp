@@ -164,17 +164,17 @@ void AirMask::useIdleTime() {
 
 void AirMask::refillAirMask() {
 	switch (getItemState()) {
-		case kAirMaskEmptyOff:
-		case kAirMaskLowOff:
-			setItemState(kAirMaskFullOff);
-			break;
-		case kAirMaskEmptyFilter:
-		case kAirMaskLowFilter:
-			setItemState(kAirMaskFullFilter);
-			break;
-		case kAirMaskLowOn:
-			setItemState(kAirMaskFullOn);
-			break;
+	case kAirMaskEmptyOff:
+	case kAirMaskLowOff:
+		setItemState(kAirMaskFullOff);
+		break;
+	case kAirMaskEmptyFilter:
+	case kAirMaskLowFilter:
+		setItemState(kAirMaskFullFilter);
+		break;
+	case kAirMaskLowOn:
+		setItemState(kAirMaskFullOn);
+		break;
 	}
 
 	if (_oxygenTimer.isFuseLit()) {

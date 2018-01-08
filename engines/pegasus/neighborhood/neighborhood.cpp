@@ -36,6 +36,7 @@
 #include "pegasus/interface.h"
 #include "pegasus/pegasus.h"
 #include "pegasus/ai/ai_area.h"
+#include "pegasus/items/biochips/arthurchip.h"
 #include "pegasus/items/biochips/mapchip.h"
 #include "pegasus/neighborhood/neighborhood.h"
 #include "pegasus/neighborhood/tsa/fulltsa.h"
@@ -470,6 +471,7 @@ void Neighborhood::requestSpotSound(const TimeValue in, const TimeValue out, con
 void Neighborhood::playSpotSoundSync(const TimeValue in, const TimeValue out) {
 	// Let the action queue play out first...
 	while (!actionQueueEmpty()) {
+		InputDevice.pumpEvents();
 		_vm->checkCallBacks();
 		_vm->refreshDisplay();
 		_vm->checkNotifications();
@@ -480,6 +482,7 @@ void Neighborhood::playSpotSoundSync(const TimeValue in, const TimeValue out) {
 	_spotSounds.playSoundSegment(in, out);
 
 	while (_spotSounds.isPlaying()) {
+		InputDevice.pumpEvents();
 		_vm->checkCallBacks();
 		_vm->refreshDisplay();
 		_vm->_system->delayMillis(10);
@@ -719,7 +722,15 @@ void Neighborhood::cantMoveThatWay(CanMoveForwardReason reason) {
 }
 
 void Neighborhood::cantOpenDoor(CanOpenDoorReason) {
+	bool firstLockedDoor;
+
 	bumpIntoWall();
+	if (g_arthurChip) {
+		firstLockedDoor = g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA31", kArthurAttemptedLockedDoor);
+
+		if (!firstLockedDoor)
+			g_arthurChip->playArthurMovieForEvent("Images/AI/Globals/XGLOBA32", kArthurAttemptedLockedDoorAgain);
+	}
 }
 
 void Neighborhood::turnTo(const DirectionConstant direction) {
@@ -1004,9 +1015,9 @@ void Neighborhood::startExitMovie(const ExitTable::Entry &exitEntry) {
 	GameState.setNextDirection(exitEntry.exitDirection);
 
 	if (exitEntry.movieEnd == exitEntry.exitEnd) // Just a walk.
-		startMovieSequence(exitEntry.movieStart, exitEntry.movieEnd, kMoveForwardCompletedFlag, kFilterNoInput, false);
+		startMovieSequence(exitEntry.movieStart, exitEntry.movieEnd, kMoveForwardCompletedFlag, false, kFilterNoInput);
 	else // We're stridin'!
-		startMovieSequence(exitEntry.movieStart, exitEntry.exitEnd, kStrideCompletedFlag, kFilterNoInput, false, exitEntry.movieEnd);
+		startMovieSequence(exitEntry.movieStart, exitEntry.exitEnd, kStrideCompletedFlag, false, kFilterNoInput, exitEntry.movieEnd);
 
 	if (g_compass)
 		g_compass->startFader(compassMove);
@@ -1021,14 +1032,14 @@ void Neighborhood::startZoomMovie(const ZoomTable::Entry &zoomEntry) {
 	GameState.setNextRoom(zoomEntry.room);
 	GameState.setNextDirection(zoomEntry.direction);
 
-	startMovieSequence(zoomEntry.movieStart, zoomEntry.movieEnd, kMoveForwardCompletedFlag, kFilterNoInput, false);
+	startMovieSequence(zoomEntry.movieStart, zoomEntry.movieEnd, kMoveForwardCompletedFlag, false, kFilterNoInput);
 
 	if (g_compass)
 		g_compass->startFader(compassMove);
 }
 
 void Neighborhood::startDoorOpenMovie(const TimeValue startTime, const TimeValue stopTime) {
-	startMovieSequence(startTime, stopTime, kDoorOpenCompletedFlag, kFilterNoInput, false);
+	startMovieSequence(startTime, stopTime, kDoorOpenCompletedFlag, false, kFilterNoInput);
 }
 
 void Neighborhood::startTurnPush(const TurnDirection turnDirection, const TimeValue newView, const DirectionConstant nextDir) {
@@ -1105,6 +1116,7 @@ void Neighborhood::startTurnPush(const TurnDirection turnDirection, const TimeVa
 	_turnPush.continueFader();
 
 	do {
+		InputDevice.pumpEvents();
 		_vm->checkCallBacks();
 		_vm->refreshDisplay();
 		_vm->_system->delayMillis(10);
@@ -1186,7 +1198,7 @@ void Neighborhood::activateOneHotspot(HotspotInfoTable::Entry &entry, Hotspot *h
 
 void Neighborhood::startSpotOnceOnly(TimeValue startTime, TimeValue stopTime) {
 	_turnPush.hide();
-	startMovieSequence(startTime, stopTime, kSpotCompletedFlag, kFilterNoInput, false);
+	startMovieSequence(startTime, stopTime, kSpotCompletedFlag, false, kFilterNoInput);
 }
 
 void Neighborhood::startMovieSequence(const TimeValue startTime, const TimeValue stopTime, NotificationFlags flags, bool loopSequence,
@@ -1492,7 +1504,15 @@ void Neighborhood::loadLoopSound2(const Common::String &soundName, uint16 volume
 		if (!_loop2SoundString.empty()) {
 			_soundLoop2.initFromAIFFFile(_loop2SoundString);
 			_soundLoop2.loopSound();
-			_loop2Fader.setMasterVolume(_vm->getAmbienceLevel());
+			// HACK: Some ambient loops are actually sound effects, like Ares waiting at
+			// the reactor and Poseidon at the launch console. Detect these and use the
+			// SFX volume instead of ambience.
+			if (soundName == "Sounds/Mars/Robot Loop.aiff" ||
+				soundName == "Sounds/Norad/Breathing Typing.22K.AIFF" ||
+				soundName == "Sounds/Norad/N54NAS.32K.AIFF")
+				_loop2Fader.setMasterVolume(_vm->getSoundFXLevel());
+			else
+				_loop2Fader.setMasterVolume(_vm->getAmbienceLevel());
 			_loop2Fader.setFaderValue(0);
 			faderMove.makeTwoKnotFaderSpec(fadeScale, 0, 0, fadeIn, volume);
 			_loop2Fader.startFaderSync(faderMove);
@@ -1550,7 +1570,7 @@ void Neighborhood::startExtraLongSequence(const uint32 firstExtra, const uint32 
 		getExtraEntry(lastExtra, lastEntry);
 		_lastExtra = firstExtra;
 		_turnPush.hide();
-		startMovieSequence(firstEntry.movieStart, lastEntry.movieEnd, flags, kFilterNoInput, interruptionFilter);
+		startMovieSequence(firstEntry.movieStart, lastEntry.movieEnd, flags, false, interruptionFilter);
 	}
 }
 
@@ -1577,6 +1597,7 @@ void Neighborhood::closeCroppedMovie() {
 
 void Neighborhood::playCroppedMovieOnce(const Common::String &movieName, CoordType left, CoordType top, const InputBits interruptionFilter) {
 	openCroppedMovie(movieName, left, top);
+	_croppedMovie.setVolume(_vm->getSoundFXLevel());
 	_croppedMovie.redrawMovieWorld();
 	_croppedMovie.start();
 
@@ -1616,6 +1637,7 @@ void Neighborhood::playMovieSegment(Movie *movie, TimeValue startTime, TimeValue
 	movie->start();
 
 	while (movie->isRunning()) {
+		InputDevice.pumpEvents();
 		_vm->checkCallBacks();
 		_vm->refreshDisplay();
 		_vm->_system->delayMillis(10);
@@ -1647,7 +1669,10 @@ void Neighborhood::handleInput(const Input &input, const Hotspot *cursorSpot) {
 		else if (input.rightButtonAnyDown())
 			rightButton(input);
 	}
-
+	if (_vm->toggleRequested()) {
+		_vm->requestToggle(false);
+		_vm->setChattyAI(!_vm->isChattyAI());
+	}
 	InputHandler::handleInput(input, cursorSpot);
 }
 
