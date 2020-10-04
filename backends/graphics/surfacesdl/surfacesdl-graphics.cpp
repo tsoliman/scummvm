@@ -2576,7 +2576,7 @@ SDL_Surface *SurfaceSdlGraphicsManager::SDL_SetVideoMode(int width, int height, 
 	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
 #endif
 
-	_renderer = SDL_CreateRenderer(_window->getSDLWindow(), -1, 0);
+	_renderer = SDL_CreateRenderer(_window->getSDLWindow(), -1, SDL_RENDERER_PRESENTVSYNC);
 	if (!_renderer) {
 		deinitializeRenderer();
 		return nullptr;
