@@ -112,7 +112,7 @@ static const ADExtraGuiOptionsMap optionsList[] = {
 			_s("Pause when entering commands"),
 			_s("Shows a command prompt window and pauses the game (like in SCI) instead of a real-time prompt."),
 			"commandpromptwindow",
-			false
+			true
 		}
 	},
 
