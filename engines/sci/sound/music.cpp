@@ -89,7 +89,7 @@ void SciMusic::init() {
 		deviceFlags |= MDT_PREFER_GM;
 	else if (getSciVersion() < SCI_VERSION_2)
 		deviceFlags |= MDT_PREFER_MT32;
-	else
+	else if (g_sci->getGameId() != GID_QFG4)
 		deviceFlags |= MDT_PREFER_GM;
 
 	// SCI_VERSION_0_EARLY games apparently don't support the CMS. At least there

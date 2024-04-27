@@ -246,7 +246,7 @@ MidiPlayer_Midi::MidiPlayer_Midi(SciVersion version) :
 		deviceFlags |= MDT_PREFER_GM;
 	else if (getSciVersion() < SCI_VERSION_2)
 		deviceFlags |= MDT_PREFER_MT32;
-	else
+	else if (g_sci->getGameId() != GID_QFG4)
 		deviceFlags |= MDT_PREFER_GM;
 	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(deviceFlags);
 	_driver = MidiDriver::createMidi(dev);
