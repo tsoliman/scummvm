@@ -40,8 +40,6 @@ const uint8 MusicPlayer::MT32_GOODBYE_MSG[] = { 0x52, 0x65, 0x74, 0x75, 0x72, 0x
 MusicPlayer::MusicPlayer(MadeEngine *vm, bool milesAudio) : _vm(vm), _parser(nullptr) {
 	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(MDT_MIDI | MDT_ADLIB | MDT_PREFER_MT32);
 	_driverType = MidiDriver::getMusicType(dev);
-	if (_driverType == MT_GM && ConfMan.getBool("native_mt32"))
-		_driverType = MT_MT32;
 
 	Common::SeekableReadStream *adLibInstrumentStream = nullptr;
 	switch (_driverType) {
