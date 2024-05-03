@@ -51,7 +51,7 @@ SoundManager::SoundManager() {
 
 	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(MDT_MIDI | MDT_ADLIB | MDT_PREFER_MT32);
 	_isRoland = MidiDriver::getMusicType(dev) != MT_ADLIB;
-	_nativeMT32 = ((MidiDriver::getMusicType(dev) == MT_MT32) || ConfMan.getBool("native_mt32"));
+	_nativeMT32 = MidiDriver::getMusicType(dev) == MT_MT32;
 
 	Common::fill(_sourcesInUse, _sourcesInUse + LURE_MAX_SOURCES, false);
 
