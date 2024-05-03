@@ -2212,7 +2212,7 @@ void ScummEngine::setupMusic(int midi) {
 		bool useOnlyNative = false;
 
 		// DOTT + SAM use General MIDI, so they shouldn't use GS settings
-		bool enable_gs = (_game.id == GID_TENTACLE || _game.id == GID_SAMNMAX) ? false : (ConfMan.getBool("enable_gs") && MidiDriver::getMusicType(dev) != MT_MT32);
+		bool enable_gs = (_game.id == GID_TENTACLE || _game.id == GID_SAMNMAX) ? false : (MidiDriver::getMusicType(dev) == MT_GS);
 		bool newSystem = (_game.id == GID_SAMNMAX);
 
 		if (isMacM68kIMuse()) {
