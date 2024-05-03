@@ -247,13 +247,6 @@ MusicManager::MusicManager(AccessEngine *vm) : _vm(vm) {
 		_driver = Audio::MidiDriver_Miles_MT32_create("");
 		_nativeMT32 = true;
 		break;
-	case MT_GM:
-		if (ConfMan.getBool("native_mt32")) {
-			_driver = Audio::MidiDriver_Miles_MT32_create("");
-			_nativeMT32 = true;
-		}
-		break;
-
 	default:
 		break;
 	}
