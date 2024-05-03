@@ -122,11 +122,6 @@ int MidiDriver_MT32::open() {
 	case MT_MT32:
 		_nativeMT32 = true;
 		break;
-	case MT_GM:
-		if (ConfMan.getBool("native_mt32")) {
-			_nativeMT32 = true;
-		}
-		break;
 	default:
 		break;
 	}

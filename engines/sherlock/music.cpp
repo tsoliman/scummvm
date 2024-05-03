@@ -251,12 +251,6 @@ Music::Music(SherlockEngine *vm, Audio::Mixer *mixer) : _vm(vm), _mixer(mixer) {
 		case MT_MT32:
 			_midiDriver = MidiDriver_MT32_create();
 			break;
-		case MT_GM:
-			if (ConfMan.getBool("native_mt32")) {
-				_midiDriver = MidiDriver_MT32_create();
-				_musicType = MT_MT32;
-			}
-			break;
 		default:
 			// Create default one
 			// I guess we shouldn't do this anymore
@@ -281,13 +275,8 @@ Music::Music(SherlockEngine *vm, Audio::Mixer *mixer) : _vm(vm), _mixer(mixer) {
 			_midiDriver = Audio::MidiDriver_Miles_MT32_create("");
 			break;
 		case MT_GM:
-			if (ConfMan.getBool("native_mt32")) {
-				_midiDriver = Audio::MidiDriver_Miles_MT32_create("");
-				_musicType = MT_MT32;
-			} else {
-				_midiDriver = MidiDriver::createMidi(dev);
-				_musicType = MT_GM;
-			}
+			_midiDriver = MidiDriver::createMidi(dev);
+			_musicType = MT_GM;
 			break;
 		default:
 			// Do not create anything
