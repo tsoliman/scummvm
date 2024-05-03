@@ -395,6 +395,13 @@ MusicDevices AlsaMusicPlugin::getDevices() const {
 
 	AlsaDevices alsaDevices = getAlsaDevices();
 
+	const Common::String mt32DeviceName = ConfMan.get("mt32_device");
+
+	MusicType mt32DeviceType = MT_INVALID;
+	if (ConfMan.getBool("native_mt32"))
+		mt32DeviceType = MT_MT32;
+	if (ConfMan.getBool("enable_gs"))
+		mt32DeviceType = MT_GS;
 	// Since the default behavior is to use the first device in the list,
 	// try to put something sensible there. We used to have 17:0 and 65:0
 	// as defaults.
@@ -403,7 +410,11 @@ MusicDevices AlsaMusicPlugin::getDevices() const {
 		const int client = d->getClient();
 
 		if (client == 17 || client == 65) {
-			devices.push_back(MusicDevice(this, d->getName(), d->getType()));
+			MusicDevice musicDevice = MusicDevice(this, d->getName(), d->getType());
+			if (mt32DeviceType != MT_INVALID && musicDevice.getCompleteId().equals(mt32DeviceName)) {
+				musicDevice = MusicDevice(this, d->getName(), mt32DeviceType);
+			}
+			devices.push_back(musicDevice);
 			d = alsaDevices.erase(d);
 		} else {
 			++d;
@@ -415,7 +426,11 @@ MusicDevices AlsaMusicPlugin::getDevices() const {
 
 	for (d = alsaDevices.begin(); d != alsaDevices.end();) {
 		if (d->getClient() == 128) {
-			devices.push_back(MusicDevice(this, d->getName(), d->getType()));
+			MusicDevice musicDevice = MusicDevice(this, d->getName(), d->getType());
+			if (mt32DeviceType != MT_INVALID && musicDevice.getCompleteId().equals(mt32DeviceName)) {
+				musicDevice = MusicDevice(this, d->getName(), mt32DeviceType);
+			}
+			devices.push_back(musicDevice);
 			d = alsaDevices.erase(d);
 		} else {
 			++d;
@@ -424,9 +439,13 @@ MusicDevices AlsaMusicPlugin::getDevices() const {
 
 	// Add the remaining devices in the order they were found.
 
-	for (d = alsaDevices.begin(); d != alsaDevices.end(); ++d)
-		devices.push_back(MusicDevice(this, d->getName(), d->getType()));
-
+	for (d = alsaDevices.begin(); d != alsaDevices.end(); ++d) {
+		MusicDevice musicDevice = MusicDevice(this, d->getName(), d->getType());
+		if (mt32DeviceType != MT_INVALID && musicDevice.getCompleteId().equals(mt32DeviceName)) {
+			musicDevice = MusicDevice(this, d->getName(), mt32DeviceType);
+		}
+		devices.push_back(musicDevice);
+	}
 	return devices;
 }
 
