@@ -100,7 +100,7 @@ Script::Script(GroovieEngine *vm, EngineVersion version) :
 	if (MidiDriver::getMusicType(dev) == MT_ADLIB) {
 		// MIDI through AdLib
 		setVariable(0x100, 0);
-	} else if ((MidiDriver::getMusicType(dev) == MT_MT32) || ConfMan.getBool("native_mt32")) {
+	} else if (MidiDriver::getMusicType(dev) == MT_MT32) {
 		// MT-32
 		setVariable(0x100, 2);
 	} else {

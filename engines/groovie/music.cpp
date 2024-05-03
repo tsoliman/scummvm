@@ -429,8 +429,6 @@ MusicPlayerXMI::MusicPlayerXMI(GroovieEngine *vm, const Common::String &gtlName)
 	// Create the driver
 	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(MDT_MIDI | MDT_ADLIB | MDT_PREFER_GM);
 	MusicType musicType = MidiDriver::getMusicType(dev);
-	if (musicType == MT_GM && ConfMan.getBool("native_mt32"))
-		musicType = MT_MT32;
 	_driver = nullptr;
 
 	_musicType = 0;
