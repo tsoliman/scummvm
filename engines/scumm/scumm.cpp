@@ -2022,7 +2022,7 @@ void ScummEngine_v100he::resetScumm() {
 
 void ScummEngine::setupMusic(int midi) {
 	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(midi);
-	_native_mt32 = ((MidiDriver::getMusicType(dev) == MT_MT32) || ConfMan.getBool("native_mt32"));
+	_native_mt32 = (MidiDriver::getMusicType(dev) == MT_MT32);
 
 	switch (MidiDriver::getMusicType(dev)) {
 	case MT_NULL:
