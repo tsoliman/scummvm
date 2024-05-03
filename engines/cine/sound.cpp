@@ -1191,7 +1191,7 @@ PCSound::PCSound(Audio::Mixer *mixer, CineEngine *vm)
 	const MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(MDT_MIDI | MDT_ADLIB);
 	const MusicType musicType = MidiDriver::getMusicType(dev);
 	if (musicType == MT_MT32 || musicType == MT_GM) {
-		const bool isMT32 = (musicType == MT_MT32 || ConfMan.getBool("native_mt32"));
+		const bool isMT32 = (musicType == MT_MT32);
 		if (isMT32) {
 			MidiDriver *driver = MidiDriver::createMidi(dev);
 			if (driver && driver->open() == 0) {
