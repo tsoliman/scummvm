@@ -532,7 +532,7 @@ const uint16 PC98FMDriver::_frequency[12] = {
 #define MIDIMSG32(s, p1, p2) (p2 << 16 | p1 << 8 | s)
 
 PC98MidiDriver::PC98MidiDriver(MidiDriver::DeviceHandle dev) : _dev(dev), _drv(nullptr) {
-	_devType = (getMusicType(dev) == MT_MT32 || ConfMan.getBool("native_mt32")) ? MT_MT32 : MT_GM;
+	_devType = (getMusicType(dev) == MT_MT32) ? MT_MT32 : MT_GM;
 	_instrumentsRemap = (_devType == MT_MT32) ? _instrumentsRemapMT32 : (_devType == MT_GM ? _instrumentsRemapGM : nullptr);
 	int8 *tbl2 = new int8[128]();
 	_instrumentLevelAdjust = tbl2;

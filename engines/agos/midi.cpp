@@ -166,9 +166,6 @@ int MidiPlayer::open() {
 		}
 	}
 
-	if (_deviceType == MT_GM && ConfMan.getBool("native_mt32"))
-		_deviceType = MT_MT32;
-
 	if (_vm->getGameType() == GType_SIMON2) {
 		// Simon 2 DOS version has both MT-32 and GM tracks; Windows is GM only.
 		_dataType = (_vm->getPlatform() == Common::kPlatformDOS && _deviceType == MT_MT32) ? MT_MT32 : MT_GM;
