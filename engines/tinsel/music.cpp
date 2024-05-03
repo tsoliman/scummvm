@@ -488,12 +488,6 @@ MidiMusicPlayer::MidiMusicPlayer(TinselEngine *vm) {
 			// Discworld 1 doesn't have a MT32 timbre file
 			_driver = Audio::MidiDriver_Miles_MT32_create("");
 			break;
-		case MT_GM:
-			if (ConfMan.getBool("native_mt32")) {
-				_driver = Audio::MidiDriver_Miles_MT32_create("");
-				musicType = MT_MT32;
-			}
-			break;
 		default:
 			break;
 		}
