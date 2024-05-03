@@ -204,13 +204,24 @@ private:
 MusicDevices CoreMIDIMusicPlugin::getDevices() const {
 	// TODO: Is it possible to get the music type for each device?
 	// Maybe look at the kMIDIPropertyModel property?
+	const Common::String mt32DeviceName = ConfMan.get("mt32_device");
+	MusicType mt32DeviceType = MT_GM;
+	if (ConfMan.getBool("native_mt32"))
+		mt32DeviceType = MT_MT32;
+	if (ConfMan.getBool("enable_gs"))
+		mt32DeviceType = MT_GS;
 
 	MusicDevices devices;
 	ItemCount deviceCount = MIDIGetNumberOfDestinations();
 	for (ItemCount i = 0 ; i < deviceCount ; ++i) {
 		Common::String name;
-		if (getDeviceName(i, name))
-			devices.push_back(MusicDevice(this, name, MT_GM));
+		if (getDeviceName(i, name)) {
+			MusicDevice musicDevice = MusicDevice(this, name, MT_GM);
+			if (mt32DeviceType != MT_INVALID && musicDevice.getCompleteId().equals(mt32DeviceName)) {
+				musicDevice = MusicDevice(this, name, mt32DeviceType);
+			}
+			devices.push_back(musicDevice);
+		}
 	}
 	return devices;
 }
