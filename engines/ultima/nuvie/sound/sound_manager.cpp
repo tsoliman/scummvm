@@ -191,9 +191,6 @@ bool SoundManager::initAudio() {
 	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(devFlags);
 	_deviceType = MidiDriver::getMusicType(dev);
 
-	if (_deviceType == MT_GM && ConfMan.getBool("native_mt32"))
-		_deviceType = MT_MT32;
-
 	switch (_deviceType) {
 	case MT_ADLIB:
 		_midiDriver = new MidiDriver_M_AdLib();
