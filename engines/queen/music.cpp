@@ -44,7 +44,7 @@ MidiMusic::MidiMusic(QueenEngine *vm)
 
 	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(MDT_MIDI | MDT_ADLIB | MDT_PREFER_MT32);
 	_adlib = (MidiDriver::getMusicType(dev) == MT_ADLIB);
-	_nativeMT32 = ((MidiDriver::getMusicType(dev) == MT_MT32) || ConfMan.getBool("native_mt32"));
+	_nativeMT32 = (MidiDriver::getMusicType(dev) == MT_MT32);
 
 	const char *musicDataFile;
 	if (vm->resource()->isDemo()) {
