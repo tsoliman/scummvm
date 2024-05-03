@@ -357,7 +357,7 @@ Common::Error SkyEngine::init() {
 		_skyMusic = new AdLibMusic(_mixer, _skyDisk);
 	} else {
 		_systemVars->systemFlags |= SF_ROLAND;
-		if ((MidiDriver::getMusicType(dev) == MT_MT32) || ConfMan.getBool("native_mt32"))
+		if (MidiDriver::getMusicType(dev) == MT_MT32)
 			_skyMusic = new MT32Music(MidiDriver::createMidi(dev), _mixer, _skyDisk);
 		else
 			_skyMusic = new GmMusic(MidiDriver::createMidi(dev), _mixer, _skyDisk);
