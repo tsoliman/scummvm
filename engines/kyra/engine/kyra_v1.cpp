@@ -119,7 +119,7 @@ Common::Error KyraEngine_v1::init() {
 
 				if (musicType == MT_PCSPK || musicType == MT_NULL)
 					type = Sound::kPCSpkr;
-				else if (musicType == MT_MT32 || ConfMan.getBool("native_mt32"))
+				else if (musicType == MT_MT32)
 					type = Sound::kMidiMT32;
 				else
 					type = Sound::kMidiGM;
