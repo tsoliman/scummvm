@@ -247,7 +247,7 @@ MidiPlayer_Midi::MidiPlayer_Midi(SciVersion version) :
 	if (ConfMan.getInt("midi_mode") == kMidiModeD110) {
 		_mt32Type = kMt32TypeD110;
 		_mt32LCDSize = 32;
-	} else if (MidiDriver::getMusicType(dev) == MT_MT32 || ConfMan.getBool("native_mt32")) {
+	} else if (MidiDriver::getMusicType(dev) == MT_MT32) {
 		if (MidiDriver::getDeviceString(dev, MidiDriver::kDriverId) == "mt32") {
 			_mt32Type = kMt32TypeEmulated;
 		} else {
