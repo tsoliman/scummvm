@@ -241,13 +241,20 @@ MidiPlayer_Midi::MidiPlayer_Midi(SciVersion version) :
 	_useMT32Track(true),
 	_missingFiles(nullptr) {
 
-	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(MDT_MIDI);
+	int deviceFlags = MDT_MIDI;
+	if (g_sci->_features->useAltWinGMSound())
+		deviceFlags |= MDT_PREFER_GM;
+	else if (getSciVersion() < SCI_VERSION_2)
+		deviceFlags |= MDT_PREFER_MT32;
+	else if (g_sci->getGameId() != GID_QFG4)
+		deviceFlags |= MDT_PREFER_GM;
+	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(deviceFlags);
 	_driver = MidiDriver::createMidi(dev);
 
 	if (ConfMan.getInt("midi_mode") == kMidiModeD110) {
 		_mt32Type = kMt32TypeD110;
 		_mt32LCDSize = 32;
-	} else if (MidiDriver::getMusicType(dev) == MT_MT32 || ConfMan.getBool("native_mt32")) {
+	} else if (MidiDriver::getMusicType(dev) == MT_MT32) {
 		if (MidiDriver::getDeviceString(dev, MidiDriver::kDriverId) == "mt32") {
 			_mt32Type = kMt32TypeEmulated;
 		} else {
